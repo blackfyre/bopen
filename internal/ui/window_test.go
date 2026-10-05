@@ -39,6 +39,13 @@ func press(w *window, router *input.Router, name key.Name) {
 	frame(w, router)
 }
 
+// newRouter returns a router with w's input handlers registered.
+func newRouter(w *window) *input.Router {
+	router := new(input.Router)
+	frame(w, router)
+	return router
+}
+
 func keyedWindow(t *testing.T) (*window, *input.Router, *[]string) {
 	m := model(t, "https://example.com/?fbclid=x")
 	m.Browsers = []discovery.Browser{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}, {ID: "c", Name: "C"}}

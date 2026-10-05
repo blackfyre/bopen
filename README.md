@@ -106,7 +106,7 @@ on Windows. Changes apply while the window is open. Every text colour keeps a
 contrast ratio of at least 4.5:1 in every mode and with any accent colour.
 
 Keyboard: `Enter` opens, `Esc` cancels, `Up`/`Down` or `1`–`9` choose the
-browser.
+browser, `P` toggles a private window.
 
 ### Registering
 
@@ -152,6 +152,18 @@ registered name on Windows; entries for browsers that are not installed are
 kept, so a reinstalled browser keeps its settings. The file belongs to the
 settings screen: it can be edited by hand, but comments are not kept when the
 settings screen saves it.
+
+### Profiles and private windows
+
+Browsers with more than one profile (Firefox, Zen and LibreWolf from
+`profiles.ini`; Chrome, Chromium, Brave, Edge and Vivaldi from `Local State`)
+get one entry per profile, such as **Zen Browser · Work**, which opens that
+profile. Profile entries work like any other browser: they can be hidden,
+reordered and used in site rules.
+
+Tick **Open in a private window** (or press `P`) to open the link in the
+selected browser's private window. On Linux this uses the browser's own
+private-window desktop action; on Windows, its known command-line flag.
 
 ### Site rules
 

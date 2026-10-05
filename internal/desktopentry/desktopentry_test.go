@@ -127,3 +127,33 @@ func TestParseRejectsNonDesktopEntry(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestDesktopActions(t *testing.T) {
+	for _, tc := range []struct {
+		file string
+		args []string
+	}{
+		{"brave-browser.desktop", []string{"/usr/bin/brave-browser-stable", "--incognito", testURL}},
+		{"org.mozilla.firefox.desktop", []string{"firefox", "--private-window", testURL}},
+		{"app.zen_browser.zen.desktop", []string{"/usr/bin/flatpak", "run", "--branch=stable", "--arch=x86_64",
+			"--command=launch-script.sh", "--file-forwarding", "app.zen_browser.zen", "--private-window", "@@u", testURL, "@@"}},
+	} {
+		e := parse(t, tc.file, "C")
+		a, ok := e.Actions["new-private-window"]
+		if !ok || a.Name == "" {
+			t.Errorf("%s: actions %v", tc.file, e.Actions)
+			continue
+		}
+		args, err := a.Args(testURL)
+		if err != nil || !reflect.DeepEqual(args, tc.args) {
+			t.Errorf("%s:\n got %q %v\nwant %q", tc.file, args, err, tc.args)
+		}
+	}
+}
+
+func TestActionsMustBeListed(t *testing.T) {
+	e, err := Parse(strings.NewReader("[Desktop Entry]\nType=Application\nExec=b %u\nActions=a;\n[Desktop Action a]\nExec=b --a\n[Desktop Action unlisted]\nExec=b --x\n"), "C")
+	if err != nil || len(e.Actions) != 1 || e.Actions["a"].Exec != "b --a" {
+		t.Fatalf("actions %+v %v", e.Actions, err)
+	}
+}

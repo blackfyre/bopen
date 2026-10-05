@@ -21,7 +21,15 @@ func start(b discovery.Browser, url string) error {
 	if b.Command == "" {
 		return errors.New("browser has no registered command")
 	}
-	exe, line, err := WindowsCommandLine(b.Command, url)
+	var extra []string
+	if b.OpenPrivate {
+		if b.PrivateFlag == "" {
+			return errors.New(b.Name + " has no private window")
+		}
+		extra = append(extra, b.PrivateFlag)
+	}
+	extra = append(extra, b.ProfileArgs...)
+	exe, line, err := WindowsCommandLine(b.Command, url, extra...)
 	if err != nil {
 		return err
 	}

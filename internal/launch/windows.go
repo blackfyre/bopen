@@ -15,7 +15,11 @@ import (
 // unquoted, because some browsers (Chrome's --single-argument) take the rest
 // of the command line verbatim and would see the quotes as part of the URL.
 // Without a placeholder the URL is appended.
-func WindowsCommandLine(template, url string) (string, string, error) {
+//
+// extra arguments (a private-window flag, profile arguments) are inserted
+// directly after the executable, quoted when needed, so they precede an
+// argument such as --single-argument that takes the rest of the line.
+func WindowsCommandLine(template, url string, extra ...string) (string, string, error) {
 	template = strings.TrimSpace(template)
 	exe, rest, err := splitExecutable(template)
 	if err != nil {
@@ -48,11 +52,41 @@ func WindowsCommandLine(template, url string) (string, string, error) {
 		}
 		b.WriteByte(rest[i])
 	}
-	line := template[:len(template)-len(rest)] + b.String()
+	head := template[:len(template)-len(rest)]
+	for _, a := range extra {
+		head += " " + quoteArg(a)
+	}
+	line := head + b.String()
 	if !replaced {
 		line = strings.TrimRight(line, " ") + " " + url
 	}
 	return exe, line, nil
+}
+
+// quoteArg quotes a for a Windows command line when it contains spaces,
+// tabs or quotes, following the CommandLineToArgvW rules.
+func quoteArg(a string) string {
+	if a != "" && !strings.ContainsAny(a, " \t\"") {
+		return a
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	slashes := 0
+	for i := 0; i < len(a); i++ {
+		switch a[i] {
+		case '\\':
+			slashes++
+		case '"':
+			b.WriteString(strings.Repeat(`\`, slashes+1))
+			slashes = 0
+		default:
+			slashes = 0
+		}
+		b.WriteByte(a[i])
+	}
+	b.WriteString(strings.Repeat(`\`, slashes))
+	b.WriteByte('"')
+	return b.String()
 }
 
 // splitExecutable separates the executable from the arguments of a command

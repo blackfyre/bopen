@@ -1,4 +1,4 @@
 package discovery
 
 // Discover lists the installed browsers.
-func Discover() []Browser { return DiscoverLinux() }
+func Discover() []Browser { return Expand(DiscoverLinux(), SystemPaths()) }

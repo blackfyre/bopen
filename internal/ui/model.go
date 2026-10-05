@@ -98,6 +98,19 @@ type Model struct {
 	Remember bool
 	// RememberError reports a failed save of the remembered site rule.
 	RememberError error
+	// Private opens the link in a private window of the selected browser.
+	Private bool
+}
+
+// CanOpenPrivate reports whether the selected browser has a private window.
+func (m *Model) CanOpenPrivate() bool {
+	return m.Selected >= 0 && m.Selected < len(m.Browsers) && m.Browsers[m.Selected].SupportsPrivate()
+}
+
+// SetPrivate turns the private-window option on or off; it stays off for
+// browsers without a private window.
+func (m *Model) SetPrivate(on bool) {
+	m.Private = on && m.CanOpenPrivate()
 }
 
 type spanKey struct {
@@ -172,6 +185,7 @@ func (m *Model) Move(delta int) {
 		return
 	}
 	m.Selected = min(max(m.Selected+delta, 0), len(m.Browsers)-1)
+	m.SetPrivate(m.Private)
 }
 
 // OpenSelected launches the selected browser. It reports whether the window
@@ -181,7 +195,9 @@ func (m *Model) OpenSelected() bool {
 		return false
 	}
 	b := m.Browsers[m.Selected]
-	if err := m.Open(b, m.Result()); err != nil {
+	launch := b
+	launch.OpenPrivate = m.Private && b.SupportsPrivate()
+	if err := m.Open(launch, m.Result()); err != nil {
 		m.LaunchError = "Could not open " + b.Name + ": " + err.Error()
 		return false
 	}

@@ -22,6 +22,9 @@ type Entry struct {
 	MimeTypes []string
 	Hidden    bool
 	NoDisplay bool
+	// Actions are the [Desktop Action] groups listed in the Actions key,
+	// by identifier; only Name and Exec are set.
+	Actions map[string]Entry
 }
 
 // HasMimeType reports whether the entry lists mimeType.
@@ -47,11 +50,15 @@ func ParseFile(path, lang string) (Entry, error) {
 	return e, err
 }
 
-// Parse parses a desktop entry, reading only the [Desktop Entry] group.
+// Parse parses a desktop entry: the [Desktop Entry] group and the
+// [Desktop Action] groups it lists in its Actions key.
 func Parse(r io.Reader, lang string) (Entry, error) {
 	var e Entry
 	names := map[string]string{}
-	inGroup, seenGroup := false, false
+	actionNames := map[string]map[string]string{}
+	actionExec := map[string]string{}
+	var listed []string
+	group, seenGroup := "", false
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64*1024), 1024*1024)
 	for sc.Scan() {
@@ -60,14 +67,14 @@ func Parse(r io.Reader, lang string) (Entry, error) {
 			continue
 		}
 		if line[0] == '[' {
-			if inGroup {
-				break
+			switch {
+			case line == "[Desktop Entry]":
+				group, seenGroup = "entry", true
+			case strings.HasPrefix(line, "[Desktop Action ") && strings.HasSuffix(line, "]"):
+				group = "action:" + line[len("[Desktop Action "):len(line)-1]
+			default:
+				group = ""
 			}
-			inGroup = line == "[Desktop Entry]"
-			seenGroup = seenGroup || inGroup
-			continue
-		}
-		if !inGroup {
 			continue
 		}
 		key, value, ok := strings.Cut(line, "=")
@@ -75,6 +82,26 @@ func Parse(r io.Reader, lang string) (Entry, error) {
 			continue
 		}
 		key, value = strings.TrimSpace(key), strings.TrimSpace(value)
+		if id, isAction := strings.CutPrefix(group, "action:"); isAction {
+			switch {
+			case key == "Exec":
+				actionExec[id] = unescape(value)
+			case key == "Name":
+				if actionNames[id] == nil {
+					actionNames[id] = map[string]string{}
+				}
+				actionNames[id][""] = unescape(value)
+			case strings.HasPrefix(key, "Name[") && strings.HasSuffix(key, "]"):
+				if actionNames[id] == nil {
+					actionNames[id] = map[string]string{}
+				}
+				actionNames[id][key[len("Name["):len(key)-1]] = unescape(value)
+			}
+			continue
+		}
+		if group != "entry" {
+			continue
+		}
 		switch {
 		case key == "Type":
 			e.Type = unescape(value)
@@ -90,6 +117,8 @@ func Parse(r io.Reader, lang string) (Entry, error) {
 			e.Icon = unescape(value)
 		case key == "MimeType":
 			e.MimeTypes = splitList(value)
+		case key == "Actions":
+			listed = splitList(value)
 		case key == "Hidden":
 			e.Hidden = value == "true"
 		case key == "NoDisplay":
@@ -103,6 +132,14 @@ func Parse(r io.Reader, lang string) (Entry, error) {
 		return e, errors.New("no [Desktop Entry] group")
 	}
 	e.Name = localised(names, lang)
+	for _, id := range listed {
+		if exec, ok := actionExec[id]; ok && exec != "" {
+			if e.Actions == nil {
+				e.Actions = map[string]Entry{}
+			}
+			e.Actions[id] = Entry{Name: localised(actionNames[id], lang), Exec: exec, Icon: e.Icon}
+		}
+	}
 	return e, nil
 }
 

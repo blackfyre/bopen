@@ -81,3 +81,34 @@ func TestStartMissingProgram(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestLinuxArgsPrivateAndProfile(t *testing.T) {
+	url := "https://example.com/"
+	zen := discovery.Browser{
+		Entry:        &desktopentry.Entry{Exec: "/usr/bin/flatpak run app.zen_browser.zen @@u %u @@"},
+		PrivateEntry: &desktopentry.Entry{Exec: "/usr/bin/flatpak run app.zen_browser.zen --private-window @@u %u @@"},
+		ProfileArgs:  []string{"-P", "Default (release)"},
+	}
+	got, err := LinuxArgs(zen, url)
+	if want := []string{"/usr/bin/flatpak", "run", "app.zen_browser.zen", "-P", "Default (release)", "@@u", url, "@@"}; err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("profile:\n got %q %v\nwant %q", got, err, want)
+	}
+	zen.OpenPrivate = true
+	got, err = LinuxArgs(zen, url)
+	if want := []string{"/usr/bin/flatpak", "run", "app.zen_browser.zen", "--private-window", "-P", "Default (release)", "@@u", url, "@@"}; err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("private profile:\n got %q %v\nwant %q", got, err, want)
+	}
+	brave := discovery.Browser{
+		Entry:        &desktopentry.Entry{Exec: "/usr/bin/brave-browser-stable %U"},
+		PrivateEntry: &desktopentry.Entry{Exec: "/usr/bin/brave-browser-stable --incognito"},
+		ProfileArgs:  []string{"--profile-directory=Profile 1"},
+		OpenPrivate:  true,
+	}
+	got, err = LinuxArgs(brave, url)
+	if want := []string{"/usr/bin/brave-browser-stable", "--incognito", "--profile-directory=Profile 1", url}; err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("brave:\n got %q %v\nwant %q", got, err, want)
+	}
+	if _, err := LinuxArgs(discovery.Browser{Name: "X", Entry: &desktopentry.Entry{Exec: "x %u"}, OpenPrivate: true}, url); err == nil {
+		t.Fatal("private launch without support accepted")
+	}
+}

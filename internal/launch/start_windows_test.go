@@ -81,3 +81,28 @@ func TestRealLaunchTemplates(t *testing.T) {
 		}
 	}
 }
+
+func TestRealLaunchPrivateProfile(t *testing.T) {
+	url := "https://example.com/?a=1"
+	b := discovery.Browser{ID: "stub", Name: "Stub", Command: `"` + stubBrowser + `" --single-argument %1`,
+		PrivateFlag: "--incognito", ProfileArgs: []string{"--profile-directory=Profile 1"}, OpenPrivate: true}
+	out := filepath.Join(t.TempDir(), "argv.json")
+	t.Setenv("BOPEN_ARGV_OUT", out)
+	if err := Start(b, url); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+		data, err := os.ReadFile(out)
+		if err != nil {
+			continue
+		}
+		var args []string
+		json.Unmarshal(data, &args)
+		want := []string{"--incognito", "--profile-directory=Profile 1", "--single-argument", url}
+		if !reflect.DeepEqual(args, want) {
+			t.Fatalf("got %q, want %q", args, want)
+		}
+		return
+	}
+	t.Fatal("stub browser did not run")
+}

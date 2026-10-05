@@ -36,6 +36,22 @@ type Browser struct {
 	Entry *desktopentry.Entry
 	// Command is the registered open command on Windows.
 	Command string
+
+	// PrivateEntry is the desktop action that opens a private window
+	// (Linux), and PrivateFlag the argument that does so (Windows).
+	PrivateEntry *desktopentry.Entry
+	PrivateFlag  string
+	// ProfileArgs open a specific profile; Base is the identity of the
+	// browser a profile entry belongs to.
+	ProfileArgs []string
+	Base        string
+	// OpenPrivate requests a private window for this launch.
+	OpenPrivate bool
+}
+
+// SupportsPrivate reports whether b can open a private window.
+func (b Browser) SupportsPrivate() bool {
+	return b.PrivateEntry != nil || b.PrivateFlag != ""
 }
 
 func sortBrowsers(bs []Browser) {

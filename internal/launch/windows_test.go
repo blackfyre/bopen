@@ -68,3 +68,28 @@ func TestWindowsCommandErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestWindowsCommandLineExtraArgs(t *testing.T) {
+	_, line, err := WindowsCommandLine(`"C:\Chrome\chrome.exe" --single-argument %1`, u, "--incognito", "--profile-directory=Profile 1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `"C:\Chrome\chrome.exe" --incognito "--profile-directory=Profile 1" --single-argument ` + u; line != want {
+		t.Fatalf("got  %q\nwant %q", line, want)
+	}
+}
+
+func TestQuoteArg(t *testing.T) {
+	for in, want := range map[string]string{
+		"plain":      "plain",
+		"two words":  `"two words"`,
+		"":           `""`,
+		`say "hi"`:   `"say \"hi\""`,
+		`dir\ name\`: `"dir\ name\\"`,
+		`a\"b c`:     `"a\\\"b c"`,
+	} {
+		if got := quoteArg(in); got != want {
+			t.Errorf("%q: got %s, want %s", in, got, want)
+		}
+	}
+}

@@ -73,6 +73,7 @@ type window struct {
 	cancel   widget.Clickable
 	cog      widget.Clickable
 	remember widget.Bool
+	private  widget.Bool
 	result   widget.Selectable
 	settings settingsView
 	form     ruleForm
@@ -164,6 +165,7 @@ func (w *window) syncInspector() {
 	}
 	w.browsers.Value = strconv.Itoa(w.m.Selected)
 	w.remember.Value = w.m.Remember
+	w.private.Value = w.m.Private
 	if w.m.Analysis != nil {
 		w.menus.reset(len(w.m.Analysis.Suggestions))
 	}
@@ -250,6 +252,7 @@ func (w *window) handle(gtx layout.Context) {
 	for d := 1; d <= 9; d++ {
 		filters = append(filters, key.Filter{Name: key.Name(strconv.Itoa(d))})
 	}
+	filters = append(filters, key.Filter{Name: "P", Optional: key.ModShift})
 	for {
 		ev, ok := gtx.Event(filters...)
 		if !ok {
@@ -268,12 +271,16 @@ func (w *window) handle(gtx layout.Context) {
 			w.m.Move(-1)
 		case key.NameDownArrow:
 			w.m.Move(1)
+		case "P":
+			w.m.SetPrivate(!w.m.Private)
 		default:
 			if d, err := strconv.Atoi(string(ke.Name)); err == nil && d <= len(w.m.Browsers) {
 				w.m.Selected = d - 1
+				w.m.SetPrivate(w.m.Private)
 			}
 		}
 		w.browsers.Value = strconv.Itoa(w.m.Selected)
+		w.private.Value = w.m.Private
 	}
 	for i := range w.toggles {
 		if w.toggles[i].Update(gtx) {
@@ -283,11 +290,16 @@ func (w *window) handle(gtx layout.Context) {
 	if w.remember.Update(gtx) {
 		w.m.Remember = w.remember.Value
 	}
+	if w.private.Update(gtx) {
+		w.m.SetPrivate(w.private.Value)
+	}
 	if w.browsers.Update(gtx) {
 		if i, err := strconv.Atoi(w.browsers.Value); err == nil {
 			w.m.Selected = i
+			w.m.SetPrivate(w.m.Private)
 		}
 	}
+	w.private.Value = w.m.Private
 	if w.open.Clicked(gtx) {
 		w.done = w.openSelected() || w.done
 	}
@@ -338,7 +350,12 @@ func (w *window) layoutInspector(gtx layout.Context) layout.Dimensions {
 		for i := range w.m.Browsers {
 			rows = append(rows, w.browser(i))
 		}
-		rows = append(rows, w.siteRow)
+		if w.m.CanOpenPrivate() {
+			rows = append(rows, w.privateRow)
+		}
+		if w.m.Site != nil || w.m.Host != "" {
+			rows = append(rows, w.siteRow)
+		}
 		sections = append(sections, w.card("Open in", rows...))
 	}
 	return w.page(gtx, &w.list, w.headerRow("bopen", &w.cog, iconSettings, "Settings"), sections, w.buttons)
@@ -455,6 +472,14 @@ func (w *window) openSelected() bool {
 	return ok
 }
 
+// privateRow offers a private window when the selected browser has one.
+func (w *window) privateRow(gtx layout.Context) layout.Dimensions {
+	if !w.m.CanOpenPrivate() {
+		return layout.Dimensions{}
+	}
+	return w.checkBox(&w.private, "Open in a private window (P)", w.pal.Fg).Layout(gtx)
+}
+
 // siteRow names the site rule that chose the browser, or offers to
 // remember the choice for the destination host.
 func (w *window) siteRow(gtx layout.Context) layout.Dimensions {
@@ -471,6 +496,6 @@ func (w *window) buttons(gtx layout.Context) layout.Dimensions {
 	if !w.m.CanOpen() {
 		return w.actionBar("Esc closes", w.secondaryButton(&w.cancel, "Close"))(gtx)
 	}
-	return w.actionBar("Enter opens · Esc cancels · ↑/↓ or 1–9 choose the browser",
+	return w.actionBar("Enter opens · Esc cancels · ↑/↓ or 1–9 choose · P private",
 		w.secondaryButton(&w.cancel, "Cancel"), w.primaryButton(&w.open, "Open"))(gtx)
 }
