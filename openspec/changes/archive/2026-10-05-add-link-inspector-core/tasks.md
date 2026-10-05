@@ -44,5 +44,5 @@
 ## 8. Entry point and integration
 
 - [x] 8.1 Implement `cmd/bopen` argument parsing (URL, `register`, `unregister`, usage with a non-zero exit) and the process flow from design.md, including the `when-suggestions` silent path. On Windows, link with `-H windowsgui` and call `AttachConsole` for CLI output. Verify with tests for argument dispatch and the window-needed decision, and confirm that both platform builds succeed.
-- [ ] 8.2 End-to-end check on Linux. Run `bopen register`, click a tracking link in another application, confirm the inspector appears with the last-used browser pre-selected, open the link in a Flatpak browser and in a system browser, then run `bopen unregister` and confirm the previous default is restored.
+- [x] 8.2 End-to-end check on Linux. Run `bopen register`, click a tracking link in another application, confirm the inspector appears with the last-used browser pre-selected, open the link in a Flatpak browser and in a system browser, then run `bopen unregister` and confirm the previous default is restored.
 - [x] 8.3 Run final verification: `gofmt -l .` (empty), `go vet ./...`, `go test ./...`, and `GOOS=windows go build ./...`, all passing.
