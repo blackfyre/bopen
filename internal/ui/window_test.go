@@ -14,11 +14,21 @@ import (
 	"github.com/blackfyre/bopen/internal/discovery"
 )
 
+// clock gives every test frame a distinct time. Gio widgets such as
+// ContextArea skip a frame whose time equals the previous one, which
+// time.Now() can produce on platforms with a coarse clock (Windows).
+var clock = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+func nextFrameTime() time.Time {
+	clock = clock.Add(16 * time.Millisecond)
+	return clock
+}
+
 // frame runs one frame of w against router and returns after layout.
 func frame(w *window, router *input.Router) {
 	var ops op.Ops
 	gtx := layout.Context{Ops: &ops, Metric: unit.Metric{PxPerDp: 1, PxPerSp: 1},
-		Constraints: layout.Exact(image.Pt(800, 600)), Now: time.Now(), Source: router.Source()}
+		Constraints: layout.Exact(image.Pt(800, 600)), Now: nextFrameTime(), Source: router.Source()}
 	w.handle(gtx)
 	w.layout(gtx)
 	router.Frame(&ops)

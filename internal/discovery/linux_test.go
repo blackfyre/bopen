@@ -1,3 +1,5 @@
+//go:build linux
+
 package discovery
 
 import (
@@ -42,14 +44,6 @@ func newTree(t *testing.T) (tree, []Root) {
 		{tr.user, KindUser}, {tr.userFlatpak, KindFlatpak}, {tr.system, KindSystem},
 		{tr.flatpak, KindFlatpak}, {tr.snap, KindSnap},
 	}
-}
-
-func ids(bs []Browser) []string {
-	out := []string{}
-	for _, b := range bs {
-		out = append(out, b.ID+"/"+string(b.Kind))
-	}
-	return out
 }
 
 func TestLinuxDiscovery(t *testing.T) {

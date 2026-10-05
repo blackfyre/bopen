@@ -3,7 +3,6 @@ package ui
 import (
 	"image"
 	"testing"
-	"time"
 
 	"gioui.org/f32"
 	"gioui.org/io/input"
@@ -16,7 +15,7 @@ import (
 func scaledFrame(w *window, router *input.Router) {
 	ops := new(op.Ops)
 	gtx := layout.Context{Ops: ops, Metric: unit.Metric{PxPerDp: 1.5, PxPerSp: 1.5},
-		Constraints: layout.Exact(image.Pt(1140, 760)), Now: time.Now(), Source: router.Source()}
+		Constraints: layout.Exact(image.Pt(1140, 760)), Now: nextFrameTime(), Source: router.Source()}
 	w.handle(gtx)
 	w.layout(gtx)
 	router.Frame(ops)
