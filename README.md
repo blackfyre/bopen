@@ -67,6 +67,22 @@ Download `bopen_windows_amd64.zip` (or `bopen_windows_arm64.zip`) from the
 in that folder. The executable is not code-signed yet, so SmartScreen may warn
 on first start.
 
+### From source with `go install`
+
+Handy for testing a branch or installing on a platform without a published
+binary. It needs Go 1.27.1 or newer (the version in `go.mod`) and, on Linux, the Gio development
+packages listed under [Building](#building):
+
+```
+go install github.com/blackfyre/bopen/cmd/bopen@latest    # or @v0.1.0, @main, @<commit>
+```
+
+The binary lands in `$(go env GOBIN)`, or `$(go env GOPATH)/bin`
+(usually `~/go/bin`) when `GOBIN` is unset; register it from there with
+`bopen register`. On Windows, add `-ldflags=-H=windowsgui` so no console
+window appears on every link. Binaries built this way report their version as
+`dev`.
+
 ### Uninstalling
 
 Run `bopen unregister` first, so your previous default browser is restored,
