@@ -98,3 +98,10 @@ Downloaded rule data SHALL be stored in a `bopen` directory inside the OS user c
 #### Scenario: Rule persisted
 - **WHEN** the user saves a site rule for `*.atlassian.net` with Chrome
 - **THEN** `config.toml` contains a `[[sites]]` entry with a new unique `id`, `hosts = ["*.atlassian.net"]` and Chrome's identity
+
+### Requirement: Short-link expansion preference
+`config.toml` SHALL support a top-level boolean `expand_short_links`, defaulting to `false`, that enables the Expand action for known shorteners.
+
+#### Scenario: Default
+- **WHEN** `config.toml` has no `expand_short_links` key
+- **THEN** short-link expansion is disabled

@@ -75,6 +75,10 @@ type window struct {
 	cancel   widget.Clickable
 	cog      widget.Clickable
 	copyURL  widget.Clickable
+	expand   widget.Clickable
+	// expanding is set while a short link is being expanded.
+	expanding  bool
+	expansions chan expandResult
 	// copied is the result last copied to the clipboard.
 	copied   string
 	remember widget.Bool
@@ -147,7 +151,7 @@ func run(win *window) {
 func newWindow(m *Model, env *Env) *window {
 	th := material.NewTheme()
 	th.Shaper = text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
-	w := &window{m: m, env: env, th: th, fetches: make(chan fetchResult, 4), looks: make(chan appearance.Settings, 4)}
+	w := &window{m: m, env: env, th: th, fetches: make(chan fetchResult, 4), looks: make(chan appearance.Settings, 4), expansions: make(chan expandResult, 1)}
 	w.list.Axis = layout.Vertical
 	w.settings.list.Axis = layout.Vertical
 	var look appearance.Settings
@@ -225,6 +229,7 @@ func (w *window) loop(win *app.Window) error {
 func (w *window) handle(gtx layout.Context) {
 	w.receiveFetches()
 	w.receiveLooks()
+	w.receiveExpansion()
 	if w.form.open {
 		if r, ok := w.handleForm(gtx); ok {
 			w.saveRule(r)
@@ -307,6 +312,9 @@ func (w *window) handle(gtx layout.Context) {
 		}
 	}
 	w.private.Value = w.m.Private
+	if w.expand.Clicked(gtx) {
+		w.startExpand()
+	}
 	if w.copyURL.Clicked(gtx) {
 		w.copyResult(gtx)
 	}
@@ -344,7 +352,24 @@ func (w *window) layoutInspector(gtx layout.Context) layout.Dimensions {
 			sections = append(sections, w.banner(e, bannerError))
 		}
 	}
-	sections = append(sections, w.card("Link", w.link))
+	linkRows := []layout.Widget{w.link}
+	if w.m.ExpandedFrom != "" {
+		linkRows = append(linkRows, w.muted("Expanded from "+w.m.ExpandedFrom))
+	}
+	if w.m.CanExpand() {
+		label := "Expand short link"
+		if w.expanding {
+			label = "Expanding…"
+		}
+		linkRows = append(linkRows, func(gtx layout.Context) layout.Dimensions {
+			return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+				layout.Rigid(w.smallButton(&w.expand, label, w.expanding)),
+				layout.Rigid(layout.Spacer{Width: unit.Dp(10)}.Layout),
+				layout.Flexed(1, w.muted("Asks the shortener where this link leads, without opening it.")),
+			)
+		})
+	}
+	sections = append(sections, w.card("Link", linkRows...))
 	if w.m.Analysis != nil {
 		var rows []layout.Widget
 		if len(w.m.Analysis.Suggestions) == 0 {

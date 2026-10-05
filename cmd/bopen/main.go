@@ -17,6 +17,7 @@ import (
 	"github.com/blackfyre/bopen/internal/launch"
 	"github.com/blackfyre/bopen/internal/prefs"
 	"github.com/blackfyre/bopen/internal/register"
+	"github.com/blackfyre/bopen/internal/shortlinks"
 	"github.com/blackfyre/bopen/internal/ui"
 )
 
@@ -160,6 +161,7 @@ func loadEnv() (*ui.Env, []error) {
 	if r, err := register.System(); err == nil {
 		env.Registrar = r
 	}
+	env.Expand = shortlinks.New(appVersion()).Expand
 	if cache, err := clearurls.SystemCache(); err == nil {
 		env.ClearURLs = &ui.ClearURLs{
 			Cache:   cache,

@@ -38,10 +38,11 @@ type settingsView struct {
 	close      widget.Clickable
 	reregister widget.Clickable
 	// message reports the outcome of the last action; isError marks failures.
-	message   string
-	isError   bool
-	status    string
-	clearURLs clearURLsView
+	message    string
+	isError    bool
+	status     string
+	clearURLs  clearURLsView
+	shortLinks widget.Bool
 }
 
 // openSettings switches to the settings view with widgets reflecting the
@@ -77,6 +78,7 @@ func (w *window) syncSettings() {
 		s.rules[i].Value = !cfg.IsDisabled(r.ID)
 	}
 	s.clearURLs.enabled.Value = cfg.Rules.ClearURLs
+	s.shortLinks.Value = cfg.ExpandShortLinks
 }
 
 func (w *window) refreshStatus() {
@@ -154,6 +156,10 @@ func (w *window) handleSettings(gtx layout.Context) {
 		}
 	}
 	w.handleClearURLs(gtx)
+	if s.shortLinks.Update(gtx) {
+		on := s.shortLinks.Value
+		w.save(func(c *prefs.Config) { c.ExpandShortLinks = on })
+	}
 	if w.handleSiteRules(gtx) {
 		return
 	}
@@ -299,7 +305,9 @@ func (w *window) layoutSettings(gtx layout.Context) layout.Dimensions {
 	}
 	sections = append(sections, w.card("Built-in rules", builtinRows...))
 
-	sections = append(sections, w.clearURLsCard())
+	sections = append(sections, w.clearURLsCard(), w.card("Short links",
+		w.checkBox(&s.shortLinks, "Offer to expand short links (bit.ly, t.co, lnkd.in, …)", w.pal.Fg).Layout,
+		w.muted("When on, the inspector shows Expand for links on known URL shorteners. Pressing it asks only the shortener where the link leads; the destination is not contacted.")))
 
 	defaultRows := []layout.Widget{w.muted(s.status)}
 	if w.env.Registrar != nil {

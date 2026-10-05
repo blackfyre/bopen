@@ -2,12 +2,15 @@
 package ui
 
 import (
+	"context"
 	"github.com/blackfyre/bopen/internal/app"
 	"github.com/blackfyre/bopen/internal/appearance"
 	"github.com/blackfyre/bopen/internal/clean"
 	"github.com/blackfyre/bopen/internal/clearurls"
 	"github.com/blackfyre/bopen/internal/discovery"
+	"github.com/blackfyre/bopen/internal/launch"
 	"github.com/blackfyre/bopen/internal/prefs"
+	"github.com/blackfyre/bopen/internal/shortlinks"
 )
 
 // Registrar makes bopen the default handler and reports whether it is.
@@ -33,6 +36,8 @@ type Env struct {
 	ClearURLs *ClearURLs
 	// Appearance is the host appearance at start-up.
 	Appearance appearance.Settings
+	// Expand resolves a short link; nil disables expansion.
+	Expand func(ctx context.Context, raw string) (string, error)
 }
 
 // ClearURLs holds the ClearURLs list state.
@@ -100,6 +105,35 @@ type Model struct {
 	RememberError error
 	// Private opens the link in a private window of the selected browser.
 	Private bool
+	// ExpandedFrom is the short link the inspected link was expanded from.
+	ExpandedFrom string
+}
+
+// CanExpand reports whether the inspected link may be expanded: the
+// preference is on and its host is a known shortener.
+func (m *Model) CanExpand() bool {
+	if m.Env == nil || m.Env.Expand == nil || !m.Env.Config.ExpandShortLinks || m.Analysis == nil {
+		return false
+	}
+	u, err := clean.ParseTolerant(m.Analysis.URL)
+	return err == nil && shortlinks.IsShortener(u.Hostname())
+}
+
+// Replace makes raw, the destination of the inspected short link, the
+// inspected link: it is analysed afresh and the browser is pre-selected
+// for its host.
+func (m *Model) Replace(raw string) error {
+	valid, err := launch.Validate(raw)
+	if err != nil {
+		return err
+	}
+	from := m.Analysis.URL
+	m.Analysis = clean.Analyse(valid, m.Env.Rules())
+	m.Accepted = m.Analysis.Defaults()
+	m.Input, m.ExpandedFrom = valid, from
+	m.Remember, m.Selected = false, -1
+	m.Refresh()
+	return nil
 }
 
 // CanOpenPrivate reports whether the selected browser has a private window.

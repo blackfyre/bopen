@@ -34,6 +34,8 @@ type Config struct {
 	Window   Window         `toml:"window"`
 	Browsers BrowsersConfig `toml:"browsers"`
 	Rules    RulesConfig    `toml:"rules"`
+	// ExpandShortLinks offers expanding known short links on request.
+	ExpandShortLinks bool `toml:"expand_short_links,omitempty"`
 	// Sites are the site rules, in matching order.
 	Sites []SiteRule `toml:"sites,omitempty"`
 }
@@ -291,6 +293,7 @@ func LoadConfig(dir string) (Config, []error) {
 	cfg.Browsers = raw.Browsers
 	cfg.Rules = raw.Rules
 	cfg.Sites = raw.Sites
+	cfg.ExpandShortLinks = raw.ExpandShortLinks
 	var problems []error
 	for i, r := range raw.Sites {
 		if err := r.Validate(); err != nil {

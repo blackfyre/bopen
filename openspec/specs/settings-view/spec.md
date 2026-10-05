@@ -96,3 +96,10 @@ The settings view SHALL list the site rules in matching order, with their host p
 #### Scenario: Deleting a rule
 - **WHEN** the user deletes a site rule
 - **THEN** matching links no longer pre-select its browser
+
+### Requirement: Short-link expansion setting
+The settings view SHALL offer a toggle for short-link expansion, stating that expanding contacts the shortener when the user presses Expand.
+
+#### Scenario: Enabling
+- **WHEN** the user enables the toggle
+- **THEN** `config.toml` contains `expand_short_links = true`

@@ -235,6 +235,17 @@ reported when bopen starts.
 
 bopen keeps the last-used browser in `state.toml` next to it.
 
+### Short links (optional)
+
+Shortened links (`bit.ly`, `t.co`, `lnkd.in` and other known shorteners)
+hide where they lead. Tick **Offer to expand short links** in the settings
+(or set `expand_short_links = true` in `config.toml`), and the inspector
+shows **Expand** for such links. Pressing it asks only the shortener where
+the link leads: a `HEAD` request without cookies, following redirects only
+between known shorteners, and stopping before the destination. The
+destination then replaces the link and is cleaned as usual. Nothing is
+contacted unless you press Expand.
+
 ### The ClearURLs list (optional)
 
 The built-in rules are deliberately few, so each one can explain itself. For
@@ -259,7 +270,8 @@ The list is cached in `~/.cache/bopen/` (`%LocalAppData%\bopen\` on
 Windows). It is not bundled with bopen: the ClearURLs rule data is licensed
 under the LGPL-3.0 and is downloaded from its project.
 
-With the option off (the default), bopen makes no network requests.
+With this option and short-link expansion off (the defaults), bopen makes
+no network requests.
 
 ## Building
 

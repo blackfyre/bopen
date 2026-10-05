@@ -327,3 +327,17 @@ func TestSiteRulesPersistAndValidate(t *testing.T) {
 		}
 	}
 }
+
+func TestExpandShortLinksPreference(t *testing.T) {
+	dir := t.TempDir()
+	if cfg, _ := LoadConfig(dir); cfg.ExpandShortLinks {
+		t.Fatal("enabled by default")
+	}
+	if _, err := UpdateConfig(dir, func(c *Config) { c.ExpandShortLinks = true }); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, configFile))
+	if cfg, _ := LoadConfig(dir); !cfg.ExpandShortLinks || !strings.Contains(string(data), "expand_short_links = true") {
+		t.Fatalf("not saved: %s", data)
+	}
+}
