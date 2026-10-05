@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
+	"strings"
 
 	"github.com/blackfyre/bopen/internal/app"
 	"github.com/blackfyre/bopen/internal/appearance"
@@ -21,8 +23,26 @@ import (
 // version is set at release time with -ldflags "-X main.version=...".
 var version = "dev"
 
+// appVersion is the version bopen reports: the linked-in release version,
+// else the module version recorded by `go install`, else "dev".
+func appVersion() string {
+	return resolveVersion(version, debug.ReadBuildInfo)
+}
+
+func resolveVersion(linked string, buildInfo func() (*debug.BuildInfo, bool)) string {
+	if linked != "" && linked != "dev" {
+		return linked
+	}
+	if info, ok := buildInfo(); ok && info != nil {
+		if v := info.Main.Version; v != "" && v != "(devel)" {
+			return strings.TrimPrefix(v, "v")
+		}
+	}
+	return "dev"
+}
+
 func usageText() string {
-	return "bopen " + version + "\n" + usage
+	return "bopen " + appVersion() + "\n" + usage
 }
 
 const usage = `usage:
@@ -129,7 +149,7 @@ func loadEnv() (*ui.Env, []error) {
 	if cache, err := clearurls.SystemCache(); err == nil {
 		env.ClearURLs = &ui.ClearURLs{
 			Cache:   cache,
-			Fetcher: clearurls.NewFetcher(version),
+			Fetcher: clearurls.NewFetcher(appVersion()),
 			Update:  clearurls.Update,
 			Meta:    cache.Meta(),
 		}

@@ -212,3 +212,31 @@ func TestParamsRecordedWithHosts(t *testing.T) {
 		t.Fatalf("fbclid = %+v", fb)
 	}
 }
+
+func TestMalformedEscapesStillAnalysed(t *testing.T) {
+	a := analyse(t, "https://example.com/100%real?fbclid=x")
+	if len(a.Suggestions) != 1 || a.Suggestions[0].Text != "fbclid=x" {
+		t.Fatalf("suggestions %+v", a.Suggestions)
+	}
+	a = analyse(t, "https://example.com/a%zz?utm_source=x")
+	if got := a.Clean(a.Defaults()); got != "https://example.com/a%zz" {
+		t.Fatalf("cleaned %q", got)
+	}
+	a = analyse(t, "https://example.com/?q=50%&gclid=y")
+	if len(a.Suggestions) != 1 || a.Suggestions[0].Text != "gclid=y" {
+		t.Fatalf("suggestions %+v", a.Suggestions)
+	}
+}
+
+func TestParseTolerant(t *testing.T) {
+	for in, want := range map[string]string{
+		"https://example.com/100%":      "/100%",
+		"https://example.com/%zz/%41":   "/%zz/A",
+		"https://example.com/caf%C3%A9": "/café",
+	} {
+		u, err := ParseTolerant(in)
+		if err != nil || u.Path != want {
+			t.Errorf("%q: path %q, %v; want %q", in, u.Path, err, want)
+		}
+	}
+}

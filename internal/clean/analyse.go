@@ -114,7 +114,7 @@ func Analyse(rawURL string, rules []Rule) *Analysis {
 func (a *Analysis) analyse(n *node, rules []Rule, depth int) {
 	n.redirect = -1
 	n.split()
-	u, err := url.Parse(n.text)
+	u, err := ParseTolerant(n.text)
 	if err != nil {
 		return
 	}
@@ -387,7 +387,7 @@ func unhex(c byte) (byte, bool) {
 
 // IsWebURL reports whether s is an absolute http or https URL with a host.
 func IsWebURL(s string) bool {
-	u, err := url.Parse(s)
+	u, err := ParseTolerant(s)
 	if err != nil {
 		return false
 	}

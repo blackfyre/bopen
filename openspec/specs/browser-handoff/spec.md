@@ -7,7 +7,13 @@ Launches the chosen browser with the final URL so that the URL can never be inte
 ## Requirements
 
 ### Requirement: Only web URLs are handed off
-The system SHALL hand off only absolute URLs with scheme `http` or `https` and a non-empty host, serialised in canonical form so that the argument always begins with `http://` or `https://`.
+The system SHALL hand off only absolute URLs with scheme `http` or `https` and a non-empty host. The handed-off text SHALL be the link as received, with only these changes:
+- surrounding whitespace is trimmed;
+- the scheme is lower-cased;
+- spaces, tabs and double quotes are percent-encoded;
+- suggestions the user accepted are removed.
+
+The argument therefore always begins with `http://` or `https://`. A malformed percent-escape SHALL NOT cause a link to be rejected.
 
 #### Scenario: Option-like input rejected
 - **WHEN** the input is `--gpu-launcher=calc.exe`
@@ -16,6 +22,14 @@ The system SHALL hand off only absolute URLs with scheme `http` or `https` and a
 #### Scenario: Missing host rejected
 - **WHEN** the input is `https:///path`
 - **THEN** no browser is launched
+
+#### Scenario: Unchanged link passes through byte for byte
+- **WHEN** the input is `https://example.com/café/ü?q=ö#` and no suggestion applies
+- **THEN** the browser receives exactly `https://example.com/café/ü?q=ö#`
+
+#### Scenario: Malformed escape still opens
+- **WHEN** the input is `https://example.com/a%zz?utm_source=x`
+- **THEN** the link is accepted, and accepting the suggestion hands off `https://example.com/a%zz`
 
 ### Requirement: Linux launch follows the desktop entry Exec line
 On Linux the system SHALL build the command from the browser's `Exec` key as defined by the Desktop Entry specification, without invoking a shell. The URL SHALL replace `%u` or `%U` as exactly one argument, and other field codes SHALL be expanded or removed per the specification. When `Exec` contains no URL field code, the URL SHALL be appended as the final argument.

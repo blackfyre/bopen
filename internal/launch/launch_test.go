@@ -53,3 +53,32 @@ func TestValidatedURLIsSingleSafeArgument(t *testing.T) {
 		t.Fatalf("unsafe result %q", got)
 	}
 }
+
+func TestValidateKeepsLinkByteForByte(t *testing.T) {
+	for _, in := range []string{
+		"https://example.com/café/ü?q=ö#",
+		"https://example.com/a%2Fb/c?x=%E2%82%AC&y=a+b",
+		"https://example.com/it's(here)!*;p=1?#frag%41",
+		"https://example.com/a%zz/100%",
+		"http://user@Example.COM:8080/",
+	} {
+		got, err := Validate(in)
+		if err != nil {
+			t.Errorf("%q: %v", in, err)
+			continue
+		}
+		if got != in {
+			t.Errorf("%q changed to %q", in, got)
+		}
+	}
+}
+
+func TestValidateMalformedEscapeWithCleaning(t *testing.T) {
+	got, err := Validate("https://example.com/a%zz?utm_source=x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "https://example.com/a%zz?utm_source=x" {
+		t.Fatalf("got %q", got)
+	}
+}
