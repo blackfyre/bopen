@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"fmt"
 	"path"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -25,9 +26,32 @@ const (
 type Source string
 
 const (
-	SourceBuiltin Source = "builtin"
-	SourceUser    Source = "user"
+	SourceBuiltin   Source = "builtin"
+	SourceUser      Source = "user"
+	SourceClearURLs Source = "clearurls"
 )
+
+// Provider scopes imported rules (such as ClearURLs) to the URLs matching
+// URL and none of Exceptions.
+type Provider struct {
+	Name       string
+	URL        *regexp.Regexp
+	Exceptions []*regexp.Regexp
+}
+
+// Pattern holds regular-expression matching for imported rules. When a
+// rule has a Pattern it replaces the rule's Hosts, Param, Path and Target.
+// Exactly one of Param, Raw and Redirect is set.
+type Pattern struct {
+	Provider *Provider
+	// Param matches whole raw (not decoded) query parameter names.
+	Param *regexp.Regexp
+	// Raw matches the URL text; every match is a span to remove.
+	Raw *regexp.Regexp
+	// Redirect matches a wrapper URL; its first capture group is the
+	// target, percent-encoded once.
+	Redirect *regexp.Regexp
+}
 
 // Rule describes one tracking parameter, affiliate parameter or redirect wrapper.
 type Rule struct {
@@ -40,6 +64,8 @@ type Rule struct {
 	Target []string `toml:"target"`
 	Reason string   `toml:"reason"`
 	Source Source   `toml:"-"`
+	// Pattern, when set, is used instead of Hosts, Param, Path and Target.
+	Pattern *Pattern `toml:"-"`
 }
 
 // matchesHost reports whether host (lower case) matches the rule's host scope.
@@ -53,6 +79,20 @@ func (r Rule) matchesHost(host string) bool {
 		}
 	}
 	return false
+}
+
+// paramRule reports whether the rule matches query parameters by name.
+func (r Rule) paramRule() bool {
+	return r.Pattern == nil || r.Pattern.Param != nil
+}
+
+// matchesParamName reports whether a parameter matches the rule: imported
+// rules match the raw name, own rules the lower-case decoded name.
+func (r Rule) matchesParamName(lower, raw string) bool {
+	if r.Pattern != nil {
+		return r.Pattern.Param.MatchString(raw)
+	}
+	return r.matchesParam(lower)
 }
 
 // matchesParam reports whether name (lower case) matches the rule's parameter.

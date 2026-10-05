@@ -280,3 +280,15 @@ func TestAddUserRuleUniqueIDs(t *testing.T) {
 		seen[id] = true
 	}
 }
+
+func TestClearURLsDefaultsOff(t *testing.T) {
+	cfg, _ := LoadConfig(t.TempDir())
+	if cfg.Rules.ClearURLs {
+		t.Fatal("ClearURLs enabled by default")
+	}
+	dir := t.TempDir()
+	writeConfig(t, dir, "[rules]\nclearurls = true\n")
+	if cfg, _ := LoadConfig(dir); !cfg.Rules.ClearURLs {
+		t.Fatal("clearurls = true not read")
+	}
+}

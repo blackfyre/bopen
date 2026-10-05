@@ -164,7 +164,7 @@ func userConfig(rules ...prefs.UserRule) prefs.Config {
 func TestUserRuleOnHost(t *testing.T) {
 	builtin, _ := clean.Builtin()
 	cfg := userConfig(prefs.UserRule{ID: "u-1", Kind: "tracking", Param: "ref", Hosts: []string{"news.example.com"}, Reason: "Referrer tracking"})
-	a := clean.Analyse("https://news.example.com/a?ref=home", Rules(builtin, cfg))
+	a := clean.Analyse("https://news.example.com/a?ref=home", Rules(builtin, cfg, nil))
 	if len(a.Suggestions) != 1 {
 		t.Fatalf("suggestions %+v", a.Suggestions)
 	}
@@ -172,7 +172,7 @@ func TestUserRuleOnHost(t *testing.T) {
 	if s.Kind != clean.KindTracking || s.Source != clean.SourceUser || s.Reason != "Referrer tracking" || s.RuleID != "u-1" || s.Text != "ref=home" {
 		t.Fatalf("suggestion %+v", s)
 	}
-	if a := clean.Analyse("https://other.example.com/a?ref=home", Rules(builtin, cfg)); len(a.Suggestions) != 0 {
+	if a := clean.Analyse("https://other.example.com/a?ref=home", Rules(builtin, cfg, nil)); len(a.Suggestions) != 0 {
 		t.Fatalf("scope ignored: %+v", a.Suggestions)
 	}
 }
@@ -180,7 +180,7 @@ func TestUserRuleOnHost(t *testing.T) {
 func TestUserRuleOverridesBuiltin(t *testing.T) {
 	builtin, _ := clean.Builtin()
 	cfg := userConfig(prefs.UserRule{ID: "u-2", Kind: "tracking", Param: "fbclid", Reason: "Facebook tracking, always remove"})
-	a := clean.Analyse("https://example.com/?fbclid=x", Rules(builtin, cfg))
+	a := clean.Analyse("https://example.com/?fbclid=x", Rules(builtin, cfg, nil))
 	if len(a.Suggestions) != 1 || a.Suggestions[0].Source != clean.SourceUser || a.Suggestions[0].Reason != "Facebook tracking, always remove" {
 		t.Fatalf("suggestions %+v", a.Suggestions)
 	}
@@ -189,7 +189,7 @@ func TestUserRuleOverridesBuiltin(t *testing.T) {
 func TestInvalidUserRuleNotApplied(t *testing.T) {
 	builtin, _ := clean.Builtin()
 	cfg := userConfig(prefs.UserRule{ID: "u-3", Kind: "tracking", Param: "ref", Reason: ""})
-	if a := clean.Analyse("https://example.com/?ref=x", Rules(builtin, cfg)); len(a.Suggestions) != 0 {
+	if a := clean.Analyse("https://example.com/?ref=x", Rules(builtin, cfg, nil)); len(a.Suggestions) != 0 {
 		t.Fatalf("invalid rule applied: %+v", a.Suggestions)
 	}
 }
@@ -198,7 +198,7 @@ func TestDisabledBuiltinDoesNotBlockUserRule(t *testing.T) {
 	builtin, _ := clean.Builtin()
 	cfg := userConfig(prefs.UserRule{ID: "u-4", Kind: "affiliate", Param: "utm_*", Reason: "mine"})
 	cfg.Rules.Disabled = []string{"utm"}
-	a := clean.Analyse("https://example.com/?utm_source=x", Rules(builtin, cfg))
+	a := clean.Analyse("https://example.com/?utm_source=x", Rules(builtin, cfg, nil))
 	if len(a.Suggestions) != 1 || a.Suggestions[0].Source != clean.SourceUser || a.Suggestions[0].Default {
 		t.Fatalf("suggestions %+v", a.Suggestions)
 	}

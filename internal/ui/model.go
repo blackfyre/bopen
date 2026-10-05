@@ -4,6 +4,7 @@ package ui
 import (
 	"github.com/blackfyre/bopen/internal/app"
 	"github.com/blackfyre/bopen/internal/clean"
+	"github.com/blackfyre/bopen/internal/clearurls"
 	"github.com/blackfyre/bopen/internal/discovery"
 	"github.com/blackfyre/bopen/internal/prefs"
 )
@@ -26,12 +27,29 @@ type Env struct {
 	Builtin     []clean.Rule
 	// Registrar is nil when registration is unavailable.
 	Registrar Registrar
+	// ClearURLs is nil when the ClearURLs list is unavailable (no cache
+	// directory).
+	ClearURLs *ClearURLs
+}
+
+// ClearURLs holds the ClearURLs list state.
+type ClearURLs struct {
+	Cache   clearurls.Cache
+	Fetcher clearurls.Fetcher
+	Update  clearurls.Updater
+	Meta    clearurls.Meta
+	// Rules are the rules from the cached list, loaded while enabled.
+	Rules []clean.Rule
 }
 
 // Rules returns the rules analysis uses: the user's rules, then the enabled
 // built-in rules.
 func (e *Env) Rules() []clean.Rule {
-	return app.Rules(e.Builtin, e.Config)
+	var extra []clean.Rule
+	if e.ClearURLs != nil {
+		extra = e.ClearURLs.Rules
+	}
+	return app.Rules(e.Builtin, e.Config, extra)
 }
 
 // Update saves one settings change and adopts the resulting preferences.

@@ -59,6 +59,8 @@ type node struct {
 
 	prefix, suffix string
 	segs           []segment
+	// raws are removable spans outside the query, in node text offsets.
+	raws []rawSpan
 
 	redirect int
 	child    *node
@@ -68,6 +70,36 @@ type segment struct {
 	raw        string
 	start, end int
 	sug        int
+}
+
+type rawSpan struct {
+	start, end int
+	sug        int
+}
+
+// scope decides, once per node, whether rules of each imported provider
+// apply to the node's URL.
+type scope struct {
+	text      string
+	providers map[*Provider]bool
+}
+
+func (sc *scope) applies(r Rule, host string) bool {
+	if r.Pattern == nil {
+		return r.matchesHost(host)
+	}
+	p := r.Pattern.Provider
+	if v, ok := sc.providers[p]; ok {
+		return v
+	}
+	v := p.URL.MatchString(sc.text)
+	for _, ex := range p.Exceptions {
+		if v && ex.MatchString(sc.text) {
+			v = false
+		}
+	}
+	sc.providers[p] = v
+	return v
 }
 
 // Analyse analyses rawURL, which must be an absolute http or https URL,
@@ -87,10 +119,11 @@ func (a *Analysis) analyse(n *node, rules []Rule, depth int) {
 		return
 	}
 	host := strings.ToLower(u.Hostname())
+	sc := &scope{text: n.text, providers: map[*Provider]bool{}}
 
 	targetSeg := -1
 	if depth < MaxRedirectDepth {
-		targetSeg = a.unwrap(n, u, host, rules)
+		targetSeg = a.unwrap(n, u, host, rules, sc)
 	}
 
 	for i := range n.segs {
@@ -99,6 +132,7 @@ func (a *Analysis) analyse(n *node, rules []Rule, depth int) {
 		}
 		seg := &n.segs[i]
 		name, _, _ := strings.Cut(seg.raw, "=")
+		rawName := name
 		if dec, err := url.QueryUnescape(name); err == nil {
 			name = dec
 		}
@@ -110,7 +144,7 @@ func (a *Analysis) analyse(n *node, rules []Rule, depth int) {
 		a.Params = append(a.Params, Param{Start: start, End: end, Name: name, Host: host, Suggestion: -1})
 		name = strings.ToLower(name)
 		for _, r := range rules {
-			if r.Kind == KindRedirect || !r.matchesHost(host) || !r.matchesParam(name) {
+			if r.Kind == KindRedirect || !r.paramRule() || !sc.applies(r, host) || !r.matchesParamName(name, rawName) {
 				continue
 			}
 			seg.sug = len(a.Suggestions)
@@ -130,17 +164,101 @@ func (a *Analysis) analyse(n *node, rules []Rule, depth int) {
 		}
 	}
 
+	a.matchRaw(n, rules, host, sc)
+
 	if n.child != nil {
 		a.analyse(n.child, rules, depth+1)
+	}
+}
+
+// matchRaw applies raw-text rules. A match before the query (path) or after
+// it (fragment) becomes its own span. A match inside the query counts only
+// when it covers exactly one otherwise unflagged parameter (with at most its
+// separators); other matches are dropped so highlights never overlap.
+func (a *Analysis) matchRaw(n *node, rules []Rule, host string, sc *scope) {
+	queryStart, queryEnd := len(n.prefix), len(n.text)-len(n.suffix)
+	for _, r := range rules {
+		if r.Pattern == nil || r.Pattern.Raw == nil || !sc.applies(r, host) {
+			continue
+		}
+		for _, m := range r.Pattern.Raw.FindAllStringIndex(n.text, -1) {
+			s, e := m[0], m[1]
+			if s == e {
+				continue
+			}
+			switch {
+			case e <= queryStart || s >= queryEnd:
+				if a.rawTaken(n, s, e) {
+					continue
+				}
+				start, end := n.span(s, e)
+				n.raws = append(n.raws, rawSpan{start: s, end: e, sug: len(a.Suggestions)})
+				a.Suggestions = append(a.Suggestions, a.suggestion(r, n, start, end, n.text[s:e]))
+			default:
+				for i := range n.segs {
+					seg := &n.segs[i]
+					if seg.sug >= 0 || seg.start-s > 1 || seg.start < s || e < seg.end || e-seg.end > 1 {
+						continue
+					}
+					start, end := n.span(seg.start, seg.end)
+					seg.sug = len(a.Suggestions)
+					a.Suggestions = append(a.Suggestions, a.suggestion(r, n, start, end, seg.raw))
+					for p := range a.Params {
+						if a.Params[p].Start == start && a.Params[p].End == end {
+							a.Params[p].Suggestion = seg.sug
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func (a *Analysis) rawTaken(n *node, s, e int) bool {
+	for _, r := range n.raws {
+		if s < r.end && r.start < e {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *Analysis) suggestion(r Rule, n *node, start, end int, text string) Suggestion {
+	return Suggestion{
+		Kind:      r.Kind,
+		Start:     start,
+		End:       end,
+		Text:      text,
+		Reason:    r.Reason,
+		Source:    r.Source,
+		RuleID:    r.ID,
+		Default:   r.Kind != KindAffiliate,
+		DependsOn: n.dep,
 	}
 }
 
 // unwrap looks for a redirect rule matching n and, when its target is a web
 // URL, records the redirect suggestion and the child node. It returns the
 // index of the segment holding the target, or -1.
-func (a *Analysis) unwrap(n *node, u *url.URL, host string, rules []Rule) int {
+func (a *Analysis) unwrap(n *node, u *url.URL, host string, rules []Rule, sc *scope) int {
 	for _, r := range rules {
-		if r.Kind != KindRedirect || !r.matchesHost(host) || (r.Path != "" && u.Path != r.Path) {
+		if r.Kind != KindRedirect {
+			continue
+		}
+		if r.Pattern != nil {
+			if r.Pattern.Redirect == nil || !sc.applies(r, host) {
+				continue
+			}
+			m := r.Pattern.Redirect.FindStringSubmatchIndex(n.text)
+			if m == nil || len(m) < 4 || m[2] < 0 {
+				continue
+			}
+			if seg, ok := a.redirectTo(n, u, host, r, m[2], m[3]); ok {
+				return seg
+			}
+			continue
+		}
+		if !r.matchesHost(host) || (r.Path != "" && u.Path != r.Path) {
 			continue
 		}
 		for _, param := range r.Target {
@@ -150,35 +268,50 @@ func (a *Analysis) unwrap(n *node, u *url.URL, host string, rules []Rule) int {
 					continue
 				}
 				valueStart := seg.start + len(name) + 1
-				text, starts, ends, ok := unescapeMapped(value, valueStart)
-				if !ok || !IsWebURL(text) {
+				if _, ok := a.redirectTo(n, u, host, r, valueStart, valueStart+len(value)); !ok {
 					return -1
 				}
-				for j := range starts {
-					starts[j], _ = n.span(starts[j], starts[j]+1)
-					_, ends[j] = n.span(ends[j]-1, ends[j])
-				}
-				start, end := n.span(0, len(n.text))
-				n.redirect = len(a.Suggestions)
-				a.Suggestions = append(a.Suggestions, Suggestion{
-					Kind:      KindRedirect,
-					Start:     start,
-					End:       end,
-					Text:      host + u.EscapedPath(),
-					Reason:    r.Reason,
-					Source:    r.Source,
-					RuleID:    r.ID,
-					Default:   true,
-					DependsOn: n.dep,
-					Target:    text,
-				})
-				n.child = &node{text: text, starts: starts, ends: ends, dep: n.redirect}
 				return i
 			}
 		}
 		return -1
 	}
 	return -1
+}
+
+// redirectTo records a redirect suggestion whose percent-encoded target is
+// n.text[s:e]. It returns the index of the segment containing the target
+// (or -1) and whether the target is a web URL.
+func (a *Analysis) redirectTo(n *node, u *url.URL, host string, r Rule, s, e int) (int, bool) {
+	text, starts, ends, ok := unescapeMapped(n.text[s:e], s)
+	if !ok || !IsWebURL(text) {
+		return -1, false
+	}
+	for j := range starts {
+		starts[j], _ = n.span(starts[j], starts[j]+1)
+		_, ends[j] = n.span(ends[j]-1, ends[j])
+	}
+	start, end := n.span(0, len(n.text))
+	n.redirect = len(a.Suggestions)
+	a.Suggestions = append(a.Suggestions, Suggestion{
+		Kind:      KindRedirect,
+		Start:     start,
+		End:       end,
+		Text:      host + u.EscapedPath(),
+		Reason:    r.Reason,
+		Source:    r.Source,
+		RuleID:    r.ID,
+		Default:   true,
+		DependsOn: n.dep,
+		Target:    text,
+	})
+	n.child = &node{text: text, starts: starts, ends: ends, dep: n.redirect}
+	for i, seg := range n.segs {
+		if seg.start <= s && e <= seg.end {
+			return i, true
+		}
+	}
+	return -1, true
 }
 
 // split separates n.text into prefix, query segments and fragment.
@@ -301,15 +434,30 @@ func (n *node) compose(accepted []bool) string {
 		}
 		kept = append(kept, seg.raw)
 	}
+	prefix, suffix := n.prefix, n.suffix
+	suffixStart := len(n.text) - len(n.suffix)
+	// Remove accepted raw spans from the end backwards so offsets stay valid.
+	for i := len(n.raws) - 1; i >= 0; i-- {
+		r := n.raws[i]
+		if !accepted[r.sug] {
+			continue
+		}
+		removed = true
+		if r.end <= len(n.prefix) {
+			prefix = prefix[:r.start] + prefix[r.end:]
+		} else {
+			suffix = suffix[:r.start-suffixStart] + suffix[r.end-suffixStart:]
+		}
+	}
 	if !removed {
 		return n.text
 	}
 	var b strings.Builder
-	b.WriteString(n.prefix)
+	b.WriteString(prefix)
 	if len(kept) > 0 {
 		b.WriteByte('?')
 		b.WriteString(strings.Join(kept, "&"))
 	}
-	b.WriteString(n.suffix)
+	b.WriteString(suffix)
 	return b.String()
 }

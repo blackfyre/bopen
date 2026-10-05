@@ -36,9 +36,10 @@ type settingsView struct {
 	close      widget.Clickable
 	reregister widget.Clickable
 	// message reports the outcome of the last action; isError marks failures.
-	message string
-	isError bool
-	status  string
+	message   string
+	isError   bool
+	status    string
+	clearURLs clearURLsView
 }
 
 // openSettings switches to the settings view with widgets reflecting the
@@ -73,6 +74,7 @@ func (w *window) syncSettings() {
 	for i, r := range w.env.Builtin {
 		s.rules[i].Value = !cfg.IsDisabled(r.ID)
 	}
+	s.clearURLs.enabled.Value = cfg.Rules.ClearURLs
 }
 
 func (w *window) refreshStatus() {
@@ -149,6 +151,7 @@ func (w *window) handleSettings(gtx layout.Context) {
 			}
 		}
 	}
+	w.handleClearURLs(gtx)
 	if s.addRule.Clicked(gtx) {
 		w.form.add()
 		return
@@ -275,6 +278,8 @@ func (w *window) layoutSettings(gtx layout.Context) layout.Dimensions {
 			)
 		})
 	}
+
+	sections = append(sections, w.clearURLsSection()...)
 
 	sections = append(sections, w.heading("Default browser"), w.muted(s.status))
 	if w.env.Registrar != nil {

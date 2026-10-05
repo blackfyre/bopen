@@ -9,6 +9,7 @@ import (
 
 	"github.com/blackfyre/bopen/internal/app"
 	"github.com/blackfyre/bopen/internal/clean"
+	"github.com/blackfyre/bopen/internal/clearurls"
 	"github.com/blackfyre/bopen/internal/discovery"
 	"github.com/blackfyre/bopen/internal/launch"
 	"github.com/blackfyre/bopen/internal/prefs"
@@ -123,6 +124,17 @@ func loadEnv() (*ui.Env, []error) {
 	env.Builtin = rules
 	if r, err := register.System(); err == nil {
 		env.Registrar = r
+	}
+	if cache, err := clearurls.SystemCache(); err == nil {
+		env.ClearURLs = &ui.ClearURLs{
+			Cache:   cache,
+			Fetcher: clearurls.NewFetcher(version),
+			Update:  clearurls.Update,
+			Meta:    cache.Meta(),
+		}
+		if env.Config.Rules.ClearURLs {
+			env.ClearURLs.Rules = clearurls.Load(cache)
+		}
 	}
 	return env, problems
 }

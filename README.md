@@ -176,7 +176,31 @@ reported when bopen starts.
 
 bopen keeps the last-used browser in `state.toml` next to it.
 
-bopen makes no network requests.
+### The ClearURLs list (optional)
+
+The built-in rules are deliberately few, so each one can explain itself. For
+wider coverage, tick **Also use the ClearURLs list** in the settings (or set
+`clearurls = true` under `[rules]` in `config.toml`). bopen then also uses
+the rule list of the [ClearURLs](https://github.com/ClearURLs/Rules) project,
+about 200 sites' tracking parameters and redirect wrappers. Its suggestions
+are labelled **ClearURLs list** and carry a generic reason naming the site;
+the built-in rules and your own take precedence where they overlap.
+
+Network use, only while this option is on:
+
+- the list is downloaded from `rules2.clearurls.xyz` (or the mirror
+  `rules1.clearurls.xyz`) over HTTPS and checked against its published
+  SHA-256 hash before it replaces the cached copy;
+- it is refreshed at most once a day, in the background while the
+  inspector is open, so a link never waits for it; links opened without the
+  inspector never trigger a download;
+- **Update now** in the settings downloads it immediately.
+
+The list is cached in `~/.cache/bopen/` (`%LocalAppData%\bopen\` on
+Windows). It is not bundled with bopen: the ClearURLs rule data is licensed
+under the LGPL-3.0 and is downloaded from its project.
+
+With the option off (the default), bopen makes no network requests.
 
 ## Building
 

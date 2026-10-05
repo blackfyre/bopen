@@ -1,0 +1,34 @@
+{
+  "providers": {
+    "amazon": {
+      "urlPattern": "^https?:\\/\\/(?:[a-z0-9-]+\\.)*?amazon(?:\\.[a-z]{2,}){1,}",
+      "rules": ["crid", "sprefix", "ref_?"],
+      "rawRules": ["\\/ref=[^/?]*"],
+      "referralMarketing": ["tag"],
+      "exceptions": ["^https?:\\/\\/(?:[a-z0-9-]+\\.)*?amazon(?:\\.[a-z]{2,}){1,}\\/gp\\/cart"]
+    },
+    "google": {
+      "urlPattern": "^https?:\\/\\/(?:[a-z0-9-]+\\.)*?google(?:\\.[a-z]{2,}){1,}",
+      "redirections": ["^https?:\\/\\/(?:[a-z0-9-]+\\.)*?google(?:\\.[a-z]{2,}){1,}\\/url\\?.*?(?:url|q)=(https?[^&]+)"],
+      "rules": ["ved", "usg"]
+    },
+    "example out-links": {
+      "urlPattern": "^https?:\\/\\/go\\.example\\.net",
+      "redirections": ["^https?:\\/\\/go\\.example\\.net\\/out\\?to=([^&]+)"]
+    },
+    "example fragments": {
+      "urlPattern": "^https?:\\/\\/frag\\.example\\.net",
+      "rawRules": ["#lead.*"]
+    },
+    "example query": {
+      "urlPattern": "^https?:\\/\\/q\\.example\\.net",
+      "rawRules": ["\\?pc$"]
+    },
+    "globalRules": {
+      "urlPattern": ".*",
+      "rules": ["(?:%3F)?utm(?:_[a-z_]*)?", "(?:%3F)?fbclid", "(?:%3F)?mc_eid"],
+      "completeProvider": false,
+      "forceRedirection": false
+    }
+  }
+}

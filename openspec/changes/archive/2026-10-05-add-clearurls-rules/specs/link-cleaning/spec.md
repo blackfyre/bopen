@@ -14,6 +14,8 @@ When ClearURLs is enabled and a cache exists, its providers SHALL be applied to 
 
 `completeProvider` and `forceRedirection` SHALL be ignored. A pattern that fails to compile SHALL be skipped, and the skip count SHALL be reported in settings.
 
+A `rawRules` match before the query (in the path) or after it (in the fragment) SHALL become its own removable span. A match inside the query SHALL count only when it covers exactly one parameter that no other rule flags, plus at most its separators. Any other match SHALL be ignored, so suggestions never overlap.
+
 #### Scenario: Provider-specific parameter
 - **WHEN** ClearURLs is enabled and `https://www.amazon.de/dp/B000?crid=XYZ` is analysed
 - **THEN** a `tracking` suggestion with source `clearurls` covers `crid=XYZ`
@@ -21,6 +23,10 @@ When ClearURLs is enabled and a cache exists, its providers SHALL be applied to 
 #### Scenario: Provider exception honoured
 - **WHEN** a URL matches a provider's `urlPattern` and one of its `exceptions`
 - **THEN** that provider produces no suggestions for the URL
+
+#### Scenario: Raw rule in the path
+- **WHEN** ClearURLs is enabled and `https://www.amazon.de/dp/B000/ref=sr_1_3?keywords=x` is analysed
+- **THEN** a `tracking` suggestion covers `/ref=sr_1_3`, and accepting it yields `https://www.amazon.de/dp/B000?keywords=x`
 
 ### Requirement: ClearURLs suggestions have a generic reason
 Suggestions from ClearURLs SHALL carry source `clearurls` and a reason of the form "Listed by ClearURLs as tracking for <provider>". Global rules SHALL use the provider name "all sites".

@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"os"
 	"strconv"
+	"time"
 
 	"gioui.org/app"
 	"gioui.org/font"
@@ -62,8 +63,11 @@ func kindLabel(k clean.Kind) string {
 }
 
 func sourceLabel(s clean.Source) string {
-	if s == clean.SourceBuiltin {
+	switch s {
+	case clean.SourceBuiltin:
 		return "built-in rule"
+	case clean.SourceClearURLs:
+		return "ClearURLs list"
 	}
 	return string(s) + " rule"
 }
@@ -95,6 +99,12 @@ type window struct {
 	// notice reports a failed inspector action.
 	notice string
 	done   bool
+	// win is set while the window runs, so background work can request
+	// a redraw.
+	win *app.Window
+	// fetches delivers finished ClearURLs downloads to the UI goroutine.
+	fetches  chan fetchResult
+	fetching bool
 }
 
 var (
@@ -113,7 +123,9 @@ func mustIcon(data []byte) *widget.Icon {
 // Run shows the inspector for m and exits the process when it closes.
 // It never returns.
 func Run(m *Model) {
-	run(newWindow(m, m.Env))
+	w := newWindow(m, m.Env)
+	w.startBackgroundRefresh(time.Now())
+	run(w)
 }
 
 // RunSettings shows only the settings view and exits when it closes.
@@ -140,7 +152,7 @@ func run(win *window) {
 func newWindow(m *Model, env *Env) *window {
 	th := material.NewTheme()
 	th.Shaper = text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
-	w := &window{m: m, env: env, th: th}
+	w := &window{m: m, env: env, th: th, fetches: make(chan fetchResult, 4)}
 	w.list.Axis = layout.Vertical
 	w.settings.list.Axis = layout.Vertical
 	w.syncInspector()
@@ -175,6 +187,7 @@ func (w *window) closeSettings() {
 }
 
 func (w *window) loop(win *app.Window) error {
+	w.win = win
 	var ops op.Ops
 	for {
 		switch e := win.Event().(type) {
@@ -194,6 +207,7 @@ func (w *window) loop(win *app.Window) error {
 
 // handle processes keyboard shortcuts and widget state changes.
 func (w *window) handle(gtx layout.Context) {
+	w.receiveFetches()
 	if w.form.open {
 		if r, ok := w.handleForm(gtx); ok {
 			w.saveRule(r)

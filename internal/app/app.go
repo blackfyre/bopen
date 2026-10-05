@@ -27,9 +27,13 @@ func UserRules(cfg prefs.Config) []clean.Rule {
 }
 
 // Rules returns the rules analysis uses, in precedence order: the user's
-// rules, then the enabled built-in rules.
-func Rules(builtin []clean.Rule, cfg prefs.Config) []clean.Rule {
-	return clean.Combine(UserRules(cfg), clean.Enabled(builtin, cfg.IsDisabled))
+// rules, the enabled built-in rules, then the ClearURLs rules when enabled.
+func Rules(builtin []clean.Rule, cfg prefs.Config, clearURLs []clean.Rule) []clean.Rule {
+	rules := clean.Combine(UserRules(cfg), clean.Enabled(builtin, cfg.IsDisabled))
+	if cfg.Rules.ClearURLs {
+		rules = clean.Combine(rules, clearURLs)
+	}
+	return rules
 }
 
 // Visible returns the browsers the inspector offers: Ordered without the

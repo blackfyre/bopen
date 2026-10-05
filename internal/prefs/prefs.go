@@ -51,6 +51,8 @@ type RulesConfig struct {
 	Disabled []string `toml:"disabled,omitempty"`
 	// User holds the user's own rules.
 	User []UserRule `toml:"user,omitempty"`
+	// ClearURLs enables the ClearURLs rule list and its download.
+	ClearURLs bool `toml:"clearurls,omitempty"`
 }
 
 // UserRule is a tracking or affiliate parameter rule written by the user.
@@ -176,6 +178,22 @@ func Dir() (string, error) {
 		return "", err
 	}
 	return filepath.Join(base, "bopen"), nil
+}
+
+// CacheDir returns the bopen directory inside the OS user cache directory,
+// where downloaded rule data is kept.
+func CacheDir() (string, error) {
+	base, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(base, "bopen"), nil
+}
+
+// WriteFileAtomic writes data to path through a temporary file in the same
+// directory, so readers never see a partial file.
+func WriteFileAtomic(path string, data []byte) error {
+	return writeFileAtomic(path, data)
 }
 
 // LoadConfig reads config.toml from dir. A missing file yields the defaults

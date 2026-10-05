@@ -30,13 +30,13 @@ The package has three parts:
 - `load`: parses the cache and compiles patterns, counting failures;
 - `source`: implements the rule-source interface from `add-user-rules`.
 
-Compiled providers are built lazily on first analysis. If start-up measurement shows compiling about 1,100 patterns costs too much, they are compiled per provider only when its `urlPattern` matches.
+Patterns are compiled when the cached list is loaded, which only happens when ClearURLs is enabled. Measured on the published list (2026-10-05: 810 rules, none skipped), compiling takes about 6 ms and analysing a heavily tracked URL with all rules about 0.1 ms, so lazy compilation is not needed.
 
 ### Mapping parameter rules onto spans
 
 The ClearURLs extension builds `(?:&|[/?#&])(?:<rule>=[^&]*)` and matches it against the whole URL. bopen already splits the raw query into parameter segments with offsets, so it matches `^(?:<rule>)$` (case-insensitive) against each segment's raw name instead. That's equivalent for query parameters, and yields exact spans for highlighting. Patterns with a `(?:%3F)?` prefix still match, because the raw name is tested before decoding.
 
-Raw rules are matched against the full URL text, and each match becomes a span. They don't depend on query structure; Amazon's `/ref=…` path segment is the main case.
+Raw rules are matched against the URL text. The published list has four: Amazon's `/ref=…` path segment (twice), a whole-query `?pc` and a `#lead…` fragment. A match in the path or fragment becomes its own removable span. A match inside the query counts only when it covers exactly one otherwise unflagged parameter (plus at most its separators); any other raw match is dropped, so highlights never nest or overlap.
 
 Redirections use the first capture group, percent-decoded once, then pass through the existing redirect validation and recursion.
 
