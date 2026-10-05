@@ -11,4 +11,4 @@
 
 ## 3. Workflows
 
-- [ ] 3.1 Add the `windows-latest` job, set `BOPEN_WINDOWS_INTEGRATION=1`, and bump all actions to v7 in `ci.yml` and `release.yml`. Verify with actionlint, then push and confirm both CI jobs pass.
+- [x] 3.1 Add the `windows-latest` job, set `BOPEN_WINDOWS_INTEGRATION=1`, and bump all actions to v7 in `ci.yml` and `release.yml`. Verify with actionlint, then push and confirm both CI jobs pass.
