@@ -127,6 +127,14 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
+# Keyless Sigstore signature of checksums.txt, made with the release
+# workflow's GitHub OIDC identity; it covers every asset listed there.
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args: ["sign-blob", "--bundle=${signature}", "--yes", "${artifact}"]
+
 changelog:
   sort: asc
 

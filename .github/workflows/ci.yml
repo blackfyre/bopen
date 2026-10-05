@@ -79,7 +79,8 @@ jobs:
       - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
-          args: release --snapshot --clean
+          # Signing needs the release workflow's identity.
+          args: release --snapshot --clean --skip=sign
 
       - name: Check the arm64 binary
         run: file dist/linux_linux_arm64*/bopen | grep -q 'ARM aarch64'

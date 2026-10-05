@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: write
+  # Keyless signing of checksums.txt with the workflow's identity.
+  id-token: write
 
 jobs:
   release:
@@ -32,6 +34,8 @@ jobs:
 
       - name: go test
         run: go test ./...
+
+      - uses: sigstore/cosign-installer@v4
 
       - uses: goreleaser/goreleaser-action@v7
         with:

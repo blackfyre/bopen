@@ -51,6 +51,7 @@ main() {
 		fail "either 'curl' or 'wget' is required"
 	fi
 	need tar
+	need gzip
 	need sha256sum
 	need mktemp
 
@@ -68,6 +69,20 @@ main() {
 	say "Downloading $url/$ASSET"
 	download "$url/$ASSET" "$tmp/$ASSET" || fail "download of $ASSET failed"
 	download "$url/checksums.txt" "$tmp/checksums.txt" || fail "download of checksums.txt failed"
+
+	if command -v cosign >/dev/null 2>&1; then
+		download "$url/checksums.txt.sigstore.json" "$tmp/checksums.txt.sigstore.json" ||
+			fail "download of the checksums signature failed"
+		cosign verify-blob \
+			--bundle "$tmp/checksums.txt.sigstore.json" \
+			--certificate-identity-regexp '^https://github\.com/blackfyre/bopen/\.github/workflows/release\.yml@refs/tags/v' \
+			--certificate-oidc-issuer https://token.actions.githubusercontent.com \
+			"$tmp/checksums.txt" >/dev/null 2>&1 ||
+			fail "the signature of checksums.txt could not be verified; nothing was installed"
+		say "Signature of checksums.txt verified with cosign."
+	else
+		say "cosign not found: the archive's checksum is verified, but the checksums' signature is not checked."
+	fi
 
 	grep "  $ASSET\$" "$tmp/checksums.txt" >"$tmp/expected" || fail "checksums.txt has no entry for $ASSET"
 	(cd "$tmp" && sha256sum -c expected >/dev/null 2>&1) || fail "checksum mismatch for $ASSET; nothing was installed"

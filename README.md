@@ -24,7 +24,9 @@ curl -fsSL https://raw.githubusercontent.com/blackfyre/bopen/main/install.sh | s
 ```
 
 The script downloads the latest release, verifies it against the release's
-`checksums.txt`, and installs `bopen` into `~/.local/bin` without root. It
+`checksums.txt` (and, when [cosign](https://docs.sigstore.dev/cosign/) is
+installed, verifies that file's signature first), and installs `bopen` into
+`~/.local/bin` without root. It
 does not change your default browser; run `bopen register` afterwards.
 
 To read the script before running it:
@@ -59,6 +61,22 @@ or newer (Ubuntu 22.04, Debian 12, Fedora 36 and later) and the usual
 Wayland, X11, EGL and xkbcommon libraries that every desktop already has. The
 install script picks the right one; packages are named
 `bopen_linux_<amd64|arm64>.<deb|rpm>`.
+
+### Verifying a download
+
+Every release's `checksums.txt` is signed keylessly with
+[Sigstore](https://www.sigstore.dev) by the release workflow. To verify a
+download by hand:
+
+```
+cosign verify-blob checksums.txt \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/blackfyre/bopen/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+sha256sum --ignore-missing -c checksums.txt
+```
+
+The Windows executable is not Authenticode-signed yet.
 
 ### Windows
 

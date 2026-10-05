@@ -37,7 +37,20 @@ SCRIPT
 		rm -r "$1/pkg"
 	done
 	(cd "$1" && sha256sum bopen_linux_amd64.tar.gz bopen_linux_arm64.tar.gz >checksums.txt)
+	echo '{"fake": "sigstore bundle"}' >"$1/checksums.txt.sigstore.json"
 }
+
+# cosign stubs: one accepts every signature, one rejects every signature.
+# The accepting one comes first on PATH for the ordinary cases, so a cosign
+# installed on the machine never takes part in these tests.
+cosign_ok=$work/cosign-ok
+cosign_bad=$work/cosign-bad
+mkdir -p "$cosign_ok" "$cosign_bad"
+printf '#!/bin/sh\necho "$@" >>"%s/cosign.log"\nexit 0\n' "$work" >"$cosign_ok/cosign"
+printf '#!/bin/sh\nexit 1\n' >"$cosign_bad/cosign"
+chmod +x "$cosign_ok/cosign" "$cosign_bad/cosign"
+PATH=$cosign_ok:$PATH
+export PATH
 
 srv=$work/srv
 make_release "$srv/latest/download" 0.2.0
@@ -72,6 +85,22 @@ if [ "$status" -eq 0 ] && [ -x "$dir/bopen" ] && grep -q "Installed bopen 0.2.0 
 	pass "fresh install of latest"
 else
 	fail "fresh install of latest (status $status): $(cat "$out")"
+fi
+
+if grep -q "Signature of checksums.txt verified" "$work/fresh.out" &&
+	grep -q -- "--certificate-oidc-issuer https://token.actions.githubusercontent.com" "$work/cosign.log" &&
+	grep -q -- "--bundle .*checksums.txt.sigstore.json" "$work/cosign.log"; then
+	pass "signature verified with cosign"
+else
+	fail "signature verified with cosign: $(cat "$work/fresh.out") / $(cat "$work/cosign.log" 2>/dev/null)"
+fi
+
+dir=$work/badsig/bin
+run badsig BOPEN_INSTALL_DIR="$dir" PATH="$cosign_bad:$PATH"
+if [ "$status" -ne 0 ] && grep -q "could not be verified" "$out" && [ ! -e "$dir" ]; then
+	pass "rejected signature installs nothing"
+else
+	fail "rejected signature installs nothing (status $status): $(cat "$out")"
 fi
 
 dir=$work/pinned/bin
@@ -137,7 +166,7 @@ fi
 # A PATH with everything the script needs except sha256sum.
 limited=$work/limited
 mkdir -p "$limited"
-for tool in sh uname curl tar mktemp grep cp chmod mv mkdir rm head cat dirname; do
+for tool in sh uname curl tar gzip mktemp grep cp chmod mv mkdir rm head cat dirname; do
 	ln -s "$(command -v "$tool")" "$limited/$tool"
 done
 dir=$work/nosum/bin
@@ -146,6 +175,16 @@ if [ "$status" -ne 0 ] && grep -q "'sha256sum' is required" "$out" && [ ! -e "$d
 	pass "missing sha256sum"
 else
 	fail "missing sha256sum (status $status): $(cat "$out")"
+fi
+
+# Everything the script needs, but no cosign.
+ln -s "$(command -v sha256sum)" "$limited/sha256sum"
+dir=$work/nocosign/bin
+run nocosign BOPEN_INSTALL_DIR="$dir" PATH="$limited"
+if [ "$status" -eq 0 ] && [ -x "$dir/bopen" ] && grep -q "signature is not checked" "$out"; then
+	pass "without cosign: checksum only, noted"
+else
+	fail "without cosign: checksum only, noted (status $status): $(cat "$out")"
 fi
 
 if [ ! -e "$work/registered" ]; then
