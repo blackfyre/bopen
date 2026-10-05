@@ -79,8 +79,15 @@ func BenchmarkPrepare(b *testing.B) {
 
 func TestDirectSiteRuleSkipsWindow(t *testing.T) {
 	sandbox(t)
+	// Target the last browser this platform discovers: stub desktop entries
+	// on Linux, the runner's registered browsers on Windows.
+	_, probe := prepare("https://example.com/")
+	if len(probe.Browsers) == 0 {
+		t.Skip("no browsers discovered")
+	}
+	target := probe.Browsers[len(probe.Browsers)-1].ID
 	config, _ := os.UserConfigDir()
-	cfg := "[[sites]]\nid = \"s-1\"\nhosts = [\"*.atlassian.net\"]\nbrowser = \"two.desktop\"\ndirect = true\n"
+	cfg := "[[sites]]\nid = \"s-1\"\nhosts = [\"*.atlassian.net\"]\nbrowser = \"" + target + "\"\ndirect = true\n"
 	if err := os.WriteFile(filepath.Join(config, "bopen", "config.toml"), []byte(cfg), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +95,7 @@ func TestDirectSiteRuleSkipsWindow(t *testing.T) {
 	if !s.Direct || app.NeedWindow(s) {
 		t.Fatalf("direct %v need window %v problems %v", s.Direct, app.NeedWindow(s), s.Problems)
 	}
-	if m.Browsers[m.Selected].ID != "two.desktop" || m.Result() != "https://acme.atlassian.net/browse/X-1" {
+	if m.Browsers[m.Selected].ID != target || m.Result() != "https://acme.atlassian.net/browse/X-1" {
 		t.Fatalf("selected %q result %q", m.Browsers[m.Selected].ID, m.Result())
 	}
 }
