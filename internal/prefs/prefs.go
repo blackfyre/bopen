@@ -3,10 +3,15 @@
 package prefs
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -26,7 +31,131 @@ const (
 
 // Config holds the user preferences.
 type Config struct {
-	Window Window `toml:"window"`
+	Window   Window         `toml:"window"`
+	Browsers BrowsersConfig `toml:"browsers"`
+	Rules    RulesConfig    `toml:"rules"`
+}
+
+// BrowsersConfig controls which browsers the inspector offers and in which
+// order. Identities of browsers that are not currently installed are kept.
+type BrowsersConfig struct {
+	// Hidden lists browser identities not offered in the inspector.
+	Hidden []string `toml:"hidden,omitempty"`
+	// Order lists browser identities shown first, in this order.
+	Order []string `toml:"order,omitempty"`
+}
+
+// RulesConfig controls the rule set.
+type RulesConfig struct {
+	// Disabled lists built-in rule identifiers that produce no suggestions.
+	Disabled []string `toml:"disabled,omitempty"`
+	// User holds the user's own rules.
+	User []UserRule `toml:"user,omitempty"`
+}
+
+// UserRule is a tracking or affiliate parameter rule written by the user.
+type UserRule struct {
+	ID     string   `toml:"id"`
+	Kind   string   `toml:"kind"`
+	Param  string   `toml:"param"`
+	Hosts  []string `toml:"hosts,omitempty"`
+	Reason string   `toml:"reason"`
+}
+
+// Validate reports why the rule cannot be applied, or nil.
+func (r UserRule) Validate() error {
+	switch {
+	case strings.TrimSpace(r.Param) == "" || strings.TrimSpace(r.Param) == "*":
+		return errors.New("a parameter name is required")
+	case r.Kind != "tracking" && r.Kind != "affiliate":
+		return fmt.Errorf("kind must be \"tracking\" or \"affiliate\", not %q", r.Kind)
+	case strings.TrimSpace(r.Reason) == "":
+		return errors.New("a reason is required")
+	}
+	for _, h := range r.Hosts {
+		if _, err := path.Match(h, ""); err != nil || strings.TrimSpace(h) == "" {
+			return fmt.Errorf("invalid host pattern %q", h)
+		}
+	}
+	return nil
+}
+
+// ValidUserRules returns the user rules that pass Validate.
+func (c Config) ValidUserRules() []UserRule {
+	var out []UserRule
+	for _, r := range c.Rules.User {
+		if r.Validate() == nil {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// UserRule returns the user rule with identifier id.
+func (c Config) UserRule(id string) (UserRule, bool) {
+	for _, r := range c.Rules.User {
+		if r.ID == id {
+			return r, true
+		}
+	}
+	return UserRule{}, false
+}
+
+// AddUserRule appends r with a new unique identifier and returns that identifier.
+func (c *Config) AddUserRule(r UserRule) string {
+	for {
+		var b [3]byte
+		_, _ = rand.Read(b[:])
+		r.ID = "u-" + hex.EncodeToString(b[:])
+		if _, taken := c.UserRule(r.ID); !taken {
+			break
+		}
+	}
+	c.Rules.User = append(c.Rules.User, r)
+	return r.ID
+}
+
+// SetUserRule replaces the user rule with r's identifier. It reports whether
+// the rule existed.
+func (c *Config) SetUserRule(r UserRule) bool {
+	for i := range c.Rules.User {
+		if c.Rules.User[i].ID == r.ID {
+			c.Rules.User[i] = r
+			return true
+		}
+	}
+	return false
+}
+
+// DeleteUserRule removes the user rule with identifier id.
+func (c *Config) DeleteUserRule(id string) {
+	c.Rules.User = slices.DeleteFunc(c.Rules.User, func(r UserRule) bool { return r.ID == id })
+}
+
+// DisableRule records the built-in rule id as disabled.
+func (c *Config) DisableRule(id string) {
+	if !c.IsDisabled(id) {
+		c.Rules.Disabled = append(c.Rules.Disabled, id)
+	}
+}
+
+// IsHidden reports whether the browser with identity id is hidden.
+func (c Config) IsHidden(id string) bool {
+	return contains(c.Browsers.Hidden, id)
+}
+
+// IsDisabled reports whether the built-in rule with identifier id is disabled.
+func (c Config) IsDisabled(id string) bool {
+	return contains(c.Rules.Disabled, id)
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 // DefaultConfig returns the preferences used when none are configured.
@@ -66,7 +195,18 @@ func LoadConfig(dir string) (Config, []error) {
 	if _, err := toml.Decode(string(data), &raw); err != nil {
 		return cfg, []error{fmt.Errorf("%s: %w", path, err)}
 	}
+	cfg.Browsers = raw.Browsers
+	cfg.Rules = raw.Rules
 	var problems []error
+	for i, r := range raw.Rules.User {
+		if err := r.Validate(); err != nil {
+			name := r.ID
+			if name == "" {
+				name = fmt.Sprintf("#%d", i+1)
+			}
+			problems = append(problems, fmt.Errorf("%s: user rule %s (%s) is ignored: %w", path, name, r.Param, err))
+		}
+	}
 	switch raw.Window {
 	case "":
 	case WindowAlways, WindowWhenSuggestions:
@@ -76,6 +216,37 @@ func LoadConfig(dir string) (Config, []error) {
 			path, raw.Window, WindowAlways, WindowWhenSuggestions))
 	}
 	return cfg, problems
+}
+
+// UpdateConfig applies one change to config.toml in dir: it re-reads the
+// file, applies mutate to the decoded preferences and writes the result
+// atomically, so changes saved meanwhile by another bopen instance survive.
+// It refuses to overwrite a file it cannot parse. Comments are not kept.
+func UpdateConfig(dir string, mutate func(*Config)) (Config, error) {
+	path := filepath.Join(dir, configFile)
+	cfg := DefaultConfig()
+	data, err := os.ReadFile(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+	case err != nil:
+		return cfg, err
+	default:
+		if _, err := toml.Decode(string(data), &cfg); err != nil {
+			return cfg, fmt.Errorf("%s: %w; fix or remove the file before changing settings", path, err)
+		}
+		if cfg.Window == "" {
+			cfg.Window = WindowAlways
+		}
+	}
+	mutate(&cfg)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return cfg, err
+	}
+	out, err := toml.Marshal(cfg)
+	if err != nil {
+		return cfg, err
+	}
+	return cfg, writeFileAtomic(path, out)
 }
 
 // LoadState reads state.toml from dir. A missing or unreadable file yields

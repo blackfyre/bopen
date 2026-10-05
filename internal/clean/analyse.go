@@ -15,9 +15,11 @@ type Suggestion struct {
 	Start, End int
 	// Text is the affected part as shown to the user: "name=value" for
 	// parameters, the wrapper's host and path for redirects.
-	Text    string
-	Reason  string
-	Source  Source
+	Text   string
+	Reason string
+	Source Source
+	// RuleID identifies the rule that produced the suggestion.
+	RuleID  string
 	Default bool
 	// DependsOn is the index of the redirect suggestion that revealed this
 	// suggestion, or -1.
@@ -26,10 +28,24 @@ type Suggestion struct {
 	Target string
 }
 
+// Param is one query parameter found in the analysed URL or in an unwrapped
+// redirect target.
+type Param struct {
+	// Start and End are byte offsets of the parameter in Analysis.URL.
+	Start, End int
+	// Name is the decoded parameter name.
+	Name string
+	// Host is the host of the URL that contains the parameter.
+	Host string
+	// Suggestion is the index of the suggestion covering it, or -1.
+	Suggestion int
+}
+
 // Analysis is the result of analysing one URL.
 type Analysis struct {
 	URL         string
 	Suggestions []Suggestion
+	Params      []Param
 	root        *node
 }
 
@@ -86,16 +102,19 @@ func (a *Analysis) analyse(n *node, rules []Rule, depth int) {
 		if dec, err := url.QueryUnescape(name); err == nil {
 			name = dec
 		}
-		name = strings.ToLower(name)
 		if name == "" {
 			continue
 		}
+		start, end := n.span(seg.start, seg.end)
+		param := len(a.Params)
+		a.Params = append(a.Params, Param{Start: start, End: end, Name: name, Host: host, Suggestion: -1})
+		name = strings.ToLower(name)
 		for _, r := range rules {
 			if r.Kind == KindRedirect || !r.matchesHost(host) || !r.matchesParam(name) {
 				continue
 			}
-			start, end := n.span(seg.start, seg.end)
 			seg.sug = len(a.Suggestions)
+			a.Params[param].Suggestion = seg.sug
 			a.Suggestions = append(a.Suggestions, Suggestion{
 				Kind:      r.Kind,
 				Start:     start,
@@ -103,6 +122,7 @@ func (a *Analysis) analyse(n *node, rules []Rule, depth int) {
 				Text:      seg.raw,
 				Reason:    r.Reason,
 				Source:    r.Source,
+				RuleID:    r.ID,
 				Default:   r.Kind != KindAffiliate,
 				DependsOn: n.dep,
 			})
@@ -147,6 +167,7 @@ func (a *Analysis) unwrap(n *node, u *url.URL, host string, rules []Rule) int {
 					Text:      host + u.EscapedPath(),
 					Reason:    r.Reason,
 					Source:    r.Source,
+					RuleID:    r.ID,
 					Default:   true,
 					DependsOn: n.dep,
 					Target:    text,

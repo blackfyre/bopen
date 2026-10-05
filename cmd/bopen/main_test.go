@@ -16,6 +16,7 @@ func TestParseArgs(t *testing.T) {
 		{[]string{"a", "b"}, modeUsage},
 		{[]string{"register"}, modeRegister},
 		{[]string{"unregister"}, modeUnregister},
+		{[]string{"settings"}, modeSettings},
 		{[]string{"https://example.com/"}, modeOpen},
 		{[]string{"file:///etc/passwd"}, modeOpen},
 	} {

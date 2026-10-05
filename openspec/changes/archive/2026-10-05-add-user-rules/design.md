@@ -41,7 +41,7 @@ IDs are a `u-` prefix plus 6 random hex characters. That's enough to avoid colli
 
 ### Context menus via gio-x
 
-`gioui.org/x/component` provides `ContextArea` and `MenuState`. Each parameter segment in the rendered URL becomes a clickable region, reusing the span offsets the analyser already produces for every query segment (flagged or not). Right-click anywhere else does nothing.
+`gioui.org/x/component` provides `ContextArea` and `MenuState`. Interactive rich-text spans only report primary clicks and hover, so the rendered link is wrapped in one `ContextArea`. Each parameter segment (flagged or not, using the offsets the analyser records for every query segment) is an interactive span. Its hover state tells which parameter a right-click targets. Right-clicking anywhere else does nothing. Each suggestion row has its own `ContextArea`.
 
 ### Rule form as an overlay
 
@@ -54,4 +54,4 @@ The form is a modal overlay inside the inspector, not a navigation to settings, 
 ## Risks / Trade-offs
 
 - **[Over-broad user rules]** "Any host" on a common name such as `id` could break many sites. → Suggestions remain toggleable, the form shows the scope prominently, and "this host" is the default.
-- **[Extra dependency]** `gioui.org/x` is less stable than core Gio. → Pin the version to the matching Gio release. The context-menu surface used is small enough to replace if needed.
+- **[`gioui.org/x` stability]** It is less stable than core Gio. → It is already pinned to the matching Gio release, and the context-menu surface used is small enough to replace if needed.

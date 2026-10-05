@@ -64,6 +64,18 @@ func (w Windows) Register() (string, error) {
 	return msg, nil
 }
 
+const userChoiceKey = `Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice`
+
+// IsDefault reports whether the user chose bopen for https links. known is
+// false when Windows has no recorded choice.
+func (w Windows) IsDefault() (isDefault, known bool) {
+	chosen, err := w.Reg.String(winreg.CurrentUser, userChoiceKey, "ProgId")
+	if err != nil || chosen == "" {
+		return false, false
+	}
+	return chosen == progID, true
+}
+
 // Unregister removes everything Register created.
 func (w Windows) Unregister() (string, error) {
 	for _, key := range []string{progIDKey, clientKey} {

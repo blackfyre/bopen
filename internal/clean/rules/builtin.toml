@@ -1,5 +1,6 @@
 # Built-in rules for bopen.
 #
+# id     stable identifier; users disable rules by it, so never change it
 # kind   tracking | affiliate | redirect
 # param  query parameter name (tracking/affiliate); a trailing * matches a prefix
 # hosts  optional host globs (path.Match syntax); empty matches any host
@@ -10,71 +11,85 @@
 # --- Tracking parameters on any host -------------------------------------
 
 [[rule]]
+id     = "utm"
 kind   = "tracking"
 param  = "utm_*"
 reason = "Campaign attribution (Urchin Tracking Module): tells Google Analytics and similar tools which newsletter, ad or post sent you. The page works the same without it."
 
 [[rule]]
+id     = "fbclid"
 kind   = "tracking"
 param  = "fbclid"
 reason = "Facebook click identifier: lets Facebook and the site link this visit to your Facebook activity."
 
 [[rule]]
+id     = "gclid"
 kind   = "tracking"
 param  = "gclid"
 reason = "Google Ads click identifier: ties this visit to a specific ad click for conversion tracking."
 
 [[rule]]
+id     = "dclid"
 kind   = "tracking"
 param  = "dclid"
 reason = "Google Campaign Manager / Display & Video 360 click identifier for display-ad tracking."
 
 [[rule]]
+id     = "gbraid"
 kind   = "tracking"
 param  = "gbraid"
 reason = "Google Ads click identifier used for app-to-web conversion measurement."
 
 [[rule]]
+id     = "wbraid"
 kind   = "tracking"
 param  = "wbraid"
 reason = "Google Ads click identifier used for web-to-app conversion measurement."
 
 [[rule]]
+id     = "msclkid"
 kind   = "tracking"
 param  = "msclkid"
 reason = "Microsoft Advertising (Bing Ads) click identifier for conversion tracking."
 
 [[rule]]
+id     = "yclid"
 kind   = "tracking"
 param  = "yclid"
 reason = "Yandex Direct ad click identifier for conversion tracking."
 
 [[rule]]
+id     = "mc_eid"
 kind   = "tracking"
 param  = "mc_eid"
 reason = "Mailchimp subscriber identifier: tells the sender which recipient clicked the link."
 
 [[rule]]
+id     = "mc_cid"
 kind   = "tracking"
 param  = "mc_cid"
 reason = "Mailchimp campaign identifier: records which email campaign the click came from."
 
 [[rule]]
+id     = "igshid"
 kind   = "tracking"
 param  = "igshid"
 reason = "Instagram share identifier: links this visit back to the account that shared the link."
 
 [[rule]]
+id     = "hsenc"
 kind   = "tracking"
 param  = "_hsenc"
 reason = "HubSpot email tracking token identifying the recipient who clicked."
 
 [[rule]]
+id     = "hsmi"
 kind   = "tracking"
 param  = "_hsmi"
 reason = "HubSpot email message identifier used for click tracking."
 
 [[rule]]
+id     = "mkt_tok"
 kind   = "tracking"
 param  = "mkt_tok"
 reason = "Marketo email token identifying the recipient who clicked."
@@ -82,6 +97,7 @@ reason = "Marketo email token identifying the recipient who clicked."
 # --- Redirect wrappers ----------------------------------------------------
 
 [[rule]]
+id     = "redirect-google"
 kind   = "redirect"
 hosts  = ["www.google.*", "google.*"]
 path   = "/url"
@@ -89,6 +105,7 @@ target = ["q", "url"]
 reason = "Google click-tracking redirect: Google records the click before forwarding you to the real page."
 
 [[rule]]
+id     = "redirect-facebook"
 kind   = "redirect"
 hosts  = ["l.facebook.com", "lm.facebook.com"]
 path   = "/l.php"
@@ -96,12 +113,14 @@ target = ["u"]
 reason = "Facebook outbound-link redirect: Facebook records the click before forwarding you."
 
 [[rule]]
+id     = "redirect-outlook-safelinks"
 kind   = "redirect"
 hosts  = ["*.safelinks.protection.outlook.com"]
 target = ["url"]
 reason = "Microsoft Safe Links wrapper: Microsoft records the click and scans the target before forwarding you. Unwrapping skips that scan."
 
 [[rule]]
+id     = "redirect-youtube"
 kind   = "redirect"
 hosts  = ["www.youtube.com", "youtube.com"]
 path   = "/redirect"
@@ -111,6 +130,7 @@ reason = "YouTube outbound-link redirect: YouTube records the click before forwa
 # --- Affiliate parameters (kept unless you untick them) -------------------
 
 [[rule]]
+id     = "affiliate-amazon-tag"
 kind   = "affiliate"
 param  = "tag"
 hosts  = ["amazon.*", "*.amazon.*"]

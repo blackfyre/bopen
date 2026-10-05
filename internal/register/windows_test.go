@@ -66,3 +66,19 @@ func TestWindowsUnregister(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestWindowsIsDefault(t *testing.T) {
+	reg := winreg.NewFake()
+	w := Windows{Reg: reg}
+	if _, known := w.IsDefault(); known {
+		t.Fatal("status known without UserChoice")
+	}
+	reg.SetString(winreg.CurrentUser, userChoiceKey, "ProgId", "ChromeHTML")
+	if isDefault, known := w.IsDefault(); isDefault || !known {
+		t.Fatalf("chrome default: %v %v", isDefault, known)
+	}
+	reg.SetString(winreg.CurrentUser, userChoiceKey, "ProgId", "bopenURL")
+	if isDefault, known := w.IsDefault(); !isDefault || !known {
+		t.Fatalf("bopen default: %v %v", isDefault, known)
+	}
+}

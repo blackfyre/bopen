@@ -120,3 +120,163 @@ func TestSaveStateLeavesConfigUntouched(t *testing.T) {
 		t.Fatalf("config.toml modified: %q", data)
 	}
 }
+
+func TestLoadConfigBrowsersAndRules(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "[browsers]\nhidden = [\"firefox.desktop\"]\norder = [\"zen.desktop\", \"gone.desktop\"]\n\n[rules]\ndisabled = [\"fbclid\", \"no-such-rule\"]\n")
+	cfg, problems := LoadConfig(dir)
+	if len(problems) != 0 {
+		t.Fatalf("unexpected problems: %v", problems)
+	}
+	if !cfg.IsHidden("firefox.desktop") || cfg.IsHidden("zen.desktop") {
+		t.Fatalf("hidden = %v", cfg.Browsers.Hidden)
+	}
+	if len(cfg.Browsers.Order) != 2 || cfg.Browsers.Order[1] != "gone.desktop" {
+		t.Fatalf("order = %v", cfg.Browsers.Order)
+	}
+	if !cfg.IsDisabled("fbclid") || !cfg.IsDisabled("no-such-rule") {
+		t.Fatalf("disabled = %v", cfg.Rules.Disabled)
+	}
+}
+
+func TestUpdateConfigPreservesConcurrentChanges(t *testing.T) {
+	dir := t.TempDir()
+	// Each save is one instance changing one setting; neither may lose the other's.
+	if _, err := UpdateConfig(dir, func(c *Config) { c.Browsers.Hidden = append(c.Browsers.Hidden, "firefox.desktop") }); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateConfig(dir, func(c *Config) { c.Window = WindowWhenSuggestions }); err != nil {
+		t.Fatal(err)
+	}
+	got, problems := LoadConfig(dir)
+	if len(problems) != 0 || got.Window != WindowWhenSuggestions || !got.IsHidden("firefox.desktop") {
+		t.Fatalf("got %+v, problems %v", got, problems)
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 {
+		t.Fatalf("temporary files left behind: %v", entries)
+	}
+}
+
+func TestUpdateConfigKeepsUnknownIdentities(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "[browsers]\nhidden = [\"uninstalled.desktop\"]\n")
+	if _, err := UpdateConfig(dir, func(c *Config) { c.Window = WindowWhenSuggestions }); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := LoadConfig(dir); !got.IsHidden("uninstalled.desktop") {
+		t.Fatalf("hidden = %v", got.Browsers.Hidden)
+	}
+}
+
+func TestUpdateConfigRefusesMalformedFile(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "window = ")
+	if _, err := UpdateConfig(dir, func(c *Config) { c.Window = WindowAlways }); err == nil {
+		t.Fatal("expected error")
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, configFile))
+	if string(data) != "window = " {
+		t.Fatalf("malformed file overwritten: %q", data)
+	}
+}
+
+func TestUserRulesValidation(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, `
+[[rules.user]]
+id = "u-good"
+kind = "tracking"
+param = "ref"
+hosts = ["news.example.com"]
+reason = "Referrer tracking"
+
+[[rules.user]]
+id = "u-noreason"
+kind = "tracking"
+param = "src"
+reason = ""
+
+[[rules.user]]
+id = "u-noparam"
+kind = "affiliate"
+param = ""
+reason = "x"
+
+[[rules.user]]
+id = "u-redirect"
+kind = "redirect"
+param = "q"
+reason = "x"
+`)
+	cfg, problems := LoadConfig(dir)
+	if len(problems) != 3 {
+		t.Fatalf("problems = %v", problems)
+	}
+	for _, id := range []string{"u-noreason", "u-noparam", "u-redirect"} {
+		found := false
+		for _, p := range problems {
+			found = found || strings.Contains(p.Error(), id)
+		}
+		if !found {
+			t.Errorf("no problem names %s: %v", id, problems)
+		}
+	}
+	valid := cfg.ValidUserRules()
+	if len(valid) != 1 || valid[0].ID != "u-good" || valid[0].Hosts[0] != "news.example.com" {
+		t.Fatalf("valid = %+v", valid)
+	}
+}
+
+func TestUserRuleMutationsPersist(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "window = \"when-suggestions\"\n[browsers]\nhidden = [\"firefox.desktop\"]\n")
+	var id string
+	if _, err := UpdateConfig(dir, func(c *Config) {
+		id = c.AddUserRule(UserRule{Kind: "tracking", Param: "ref", Hosts: []string{"news.example.com"}, Reason: "Referrer tracking"})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(id, "u-") || len(id) != 8 {
+		t.Fatalf("id = %q", id)
+	}
+	cfg, _ := LoadConfig(dir)
+	if r, ok := cfg.UserRule(id); !ok || r.Param != "ref" || r.Reason != "Referrer tracking" {
+		t.Fatalf("added rule = %+v", cfg.Rules.User)
+	}
+	if _, err := UpdateConfig(dir, func(c *Config) {
+		r, _ := c.UserRule(id)
+		r.Reason = "Edited"
+		c.SetUserRule(r)
+		c.DisableRule("utm")
+		c.DisableRule("utm")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ = LoadConfig(dir)
+	if r, _ := cfg.UserRule(id); r.Reason != "Edited" || len(cfg.Rules.Disabled) != 1 || !cfg.IsDisabled("utm") {
+		t.Fatalf("after edit: %+v", cfg.Rules)
+	}
+	if _, err := UpdateConfig(dir, func(c *Config) { c.DeleteUserRule(id) }); err != nil {
+		t.Fatal(err)
+	}
+	cfg, problems := LoadConfig(dir)
+	if len(cfg.Rules.User) != 0 || len(problems) != 0 {
+		t.Fatalf("after delete: %+v %v", cfg.Rules.User, problems)
+	}
+	if cfg.Window != WindowWhenSuggestions || !cfg.IsHidden("firefox.desktop") || !cfg.IsDisabled("utm") {
+		t.Fatalf("unrelated settings lost: %+v", cfg)
+	}
+}
+
+func TestAddUserRuleUniqueIDs(t *testing.T) {
+	var c Config
+	seen := map[string]bool{}
+	for i := 0; i < 200; i++ {
+		id := c.AddUserRule(UserRule{Kind: "tracking", Param: "p", Reason: "r"})
+		if seen[id] {
+			t.Fatalf("duplicate id %s", id)
+		}
+		seen[id] = true
+	}
+}

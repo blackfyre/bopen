@@ -9,11 +9,16 @@ import (
 	"github.com/blackfyre/bopen/internal/winreg"
 )
 
-// System returns the registrar for this machine.
-func System() (interface {
+// Registrar registers and unregisters bopen and reports whether it is the
+// default handler.
+type Registrar interface {
 	Register() (string, error)
 	Unregister() (string, error)
-}, error) {
+	IsDefault() (isDefault, known bool)
+}
+
+// System returns the registrar for this machine.
+func System() (Registrar, error) {
 	exe, err := os.Executable()
 	if err != nil {
 		return nil, err

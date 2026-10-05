@@ -92,3 +92,114 @@ func TestOpenFailureLeavesStateUnchanged(t *testing.T) {
 		t.Fatalf("state changed: %q -> %q", before, after)
 	}
 }
+
+func TestVisibleOrderAndHidden(t *testing.T) {
+	all := []discovery.Browser{{ID: "brave.desktop"}, {ID: "firefox.desktop"}, {ID: "zen.desktop"}}
+	cfg := prefs.Config{Browsers: prefs.BrowsersConfig{
+		Order:  []string{"gone.desktop", "zen.desktop"},
+		Hidden: []string{"firefox.desktop"},
+	}}
+	got := Visible(all, cfg)
+	if len(got) != 2 || got[0].ID != "zen.desktop" || got[1].ID != "brave.desktop" {
+		t.Fatalf("got %v", got)
+	}
+	cfg = prefs.Config{Browsers: prefs.BrowsersConfig{Order: []string{"zen.desktop"}}}
+	if got := Visible(all, cfg); got[0].ID != "zen.desktop" || got[1].ID != "brave.desktop" || got[2].ID != "firefox.desktop" {
+		t.Fatalf("ordered then unordered: got %v", got)
+	}
+}
+
+func TestPreselectSkipsHiddenLastUsed(t *testing.T) {
+	all := []discovery.Browser{{ID: "brave.desktop"}, {ID: "firefox.desktop"}}
+	cfg := prefs.Config{Browsers: prefs.BrowsersConfig{Hidden: []string{"firefox.desktop"}}}
+	visible := Visible(all, cfg)
+	st := prefs.State{LastUsed: "firefox.desktop", PreviousDefault: "brave.desktop"}
+	if i := Preselect(visible, st); i != 0 || visible[i].ID != "brave.desktop" {
+		t.Fatalf("pre-selected %d", i)
+	}
+}
+
+func TestAllHiddenNeedsWindow(t *testing.T) {
+	all := []discovery.Browser{{ID: "brave.desktop"}}
+	cfg := prefs.Config{Window: prefs.WindowWhenSuggestions, Browsers: prefs.BrowsersConfig{Hidden: []string{"brave.desktop"}}}
+	visible := Visible(all, cfg)
+	if len(visible) != 0 || Preselect(visible, prefs.State{}) != -1 {
+		t.Fatalf("visible %v", visible)
+	}
+	if !NeedWindow(Situation{Config: cfg, Analysis: analysis(t, "https://example.com/"), Browsers: visible}) {
+		t.Fatal("all-hidden must show the window")
+	}
+}
+
+func TestOrderedIncludesHidden(t *testing.T) {
+	all := []discovery.Browser{{ID: "a"}, {ID: "b"}, {ID: "c"}}
+	cfg := prefs.Config{Browsers: prefs.BrowsersConfig{Order: []string{"c"}, Hidden: []string{"c"}}}
+	got := Ordered(all, cfg)
+	if len(got) != 3 || got[0].ID != "c" {
+		t.Fatalf("got %v", got)
+	}
+}
+
+func TestMoveOrder(t *testing.T) {
+	ordered := []discovery.Browser{{ID: "brave"}, {ID: "zen"}, {ID: "ff"}}
+	got := MoveOrder(ordered, []string{"gone", "zen"}, 1, -1)
+	want := []string{"zen", "brave", "ff", "gone"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v, want %v", got, want)
+		}
+	}
+	if got := MoveOrder(ordered, nil, 0, -1); got[0] != "brave" {
+		t.Fatalf("moving the first up changed the order: %v", got)
+	}
+}
+
+func userConfig(rules ...prefs.UserRule) prefs.Config {
+	return prefs.Config{Rules: prefs.RulesConfig{User: rules}}
+}
+
+func TestUserRuleOnHost(t *testing.T) {
+	builtin, _ := clean.Builtin()
+	cfg := userConfig(prefs.UserRule{ID: "u-1", Kind: "tracking", Param: "ref", Hosts: []string{"news.example.com"}, Reason: "Referrer tracking"})
+	a := clean.Analyse("https://news.example.com/a?ref=home", Rules(builtin, cfg))
+	if len(a.Suggestions) != 1 {
+		t.Fatalf("suggestions %+v", a.Suggestions)
+	}
+	s := a.Suggestions[0]
+	if s.Kind != clean.KindTracking || s.Source != clean.SourceUser || s.Reason != "Referrer tracking" || s.RuleID != "u-1" || s.Text != "ref=home" {
+		t.Fatalf("suggestion %+v", s)
+	}
+	if a := clean.Analyse("https://other.example.com/a?ref=home", Rules(builtin, cfg)); len(a.Suggestions) != 0 {
+		t.Fatalf("scope ignored: %+v", a.Suggestions)
+	}
+}
+
+func TestUserRuleOverridesBuiltin(t *testing.T) {
+	builtin, _ := clean.Builtin()
+	cfg := userConfig(prefs.UserRule{ID: "u-2", Kind: "tracking", Param: "fbclid", Reason: "Facebook tracking, always remove"})
+	a := clean.Analyse("https://example.com/?fbclid=x", Rules(builtin, cfg))
+	if len(a.Suggestions) != 1 || a.Suggestions[0].Source != clean.SourceUser || a.Suggestions[0].Reason != "Facebook tracking, always remove" {
+		t.Fatalf("suggestions %+v", a.Suggestions)
+	}
+}
+
+func TestInvalidUserRuleNotApplied(t *testing.T) {
+	builtin, _ := clean.Builtin()
+	cfg := userConfig(prefs.UserRule{ID: "u-3", Kind: "tracking", Param: "ref", Reason: ""})
+	if a := clean.Analyse("https://example.com/?ref=x", Rules(builtin, cfg)); len(a.Suggestions) != 0 {
+		t.Fatalf("invalid rule applied: %+v", a.Suggestions)
+	}
+}
+
+func TestDisabledBuiltinDoesNotBlockUserRule(t *testing.T) {
+	builtin, _ := clean.Builtin()
+	cfg := userConfig(prefs.UserRule{ID: "u-4", Kind: "affiliate", Param: "utm_*", Reason: "mine"})
+	cfg.Rules.Disabled = []string{"utm"}
+	a := clean.Analyse("https://example.com/?utm_source=x", Rules(builtin, cfg))
+	if len(a.Suggestions) != 1 || a.Suggestions[0].Source != clean.SourceUser || a.Suggestions[0].Default {
+		t.Fatalf("suggestions %+v", a.Suggestions)
+	}
+}

@@ -27,6 +27,7 @@ const usage = `usage:
   bopen <url>       inspect a link and open it in a browser
   bopen register    make bopen the default handler for web links
   bopen unregister  undo 'bopen register'
+  bopen settings    change bopen's preferences
 `
 
 type mode int
@@ -36,6 +37,7 @@ const (
 	modeOpen
 	modeRegister
 	modeUnregister
+	modeSettings
 )
 
 func parseArgs(args []string) mode {
@@ -47,6 +49,8 @@ func parseArgs(args []string) mode {
 		return modeRegister
 	case "unregister":
 		return modeUnregister
+	case "settings":
+		return modeSettings
 	case "-h", "-help", "--help", "help":
 		return modeUsage
 	}
@@ -62,6 +66,9 @@ func main() {
 	case modeRegister, modeUnregister:
 		attachConsole()
 		os.Exit(runRegistration(os.Args[1], os.Stdout, os.Stderr))
+	case modeSettings:
+		env, _ := loadEnv()
+		ui.RunSettings(env)
 	case modeOpen:
 		runOpen(os.Args[1])
 	}
@@ -96,51 +103,57 @@ func runOpen(input string) {
 	ui.Run(m)
 }
 
-// prepare gathers preferences, browsers and the analysis for input.
-func prepare(input string) (app.Situation, *ui.Model) {
-	var s app.Situation
-	m := &ui.Model{Input: input}
-
-	s.Config = prefs.DefaultConfig()
-	var st prefs.State
-	dir, err := prefs.Dir()
-	if err != nil {
-		s.Problems = append(s.Problems, err)
+// loadEnv gathers preferences, state, browsers, rules and the registrar.
+// Problems with the configuration are returned rather than being fatal.
+func loadEnv() (*ui.Env, []error) {
+	env := &ui.Env{Config: prefs.DefaultConfig()}
+	var problems []error
+	if dir, err := prefs.Dir(); err != nil {
+		problems = append(problems, err)
 	} else {
-		s.Config, s.Problems = prefs.LoadConfig(dir)
-		st = prefs.LoadState(dir)
+		env.ConfigDir = dir
+		env.Config, problems = prefs.LoadConfig(dir)
+		env.State = prefs.LoadState(dir)
 	}
-
-	s.Browsers = discovery.Discover()
-	m.Browsers = s.Browsers
-	m.Selected = app.Preselect(s.Browsers, st)
-
+	env.AllBrowsers = discovery.Discover()
 	rules, err := clean.Builtin()
 	if err != nil {
-		s.Problems = append(s.Problems, fmt.Errorf("built-in rules: %w", err))
+		problems = append(problems, fmt.Errorf("built-in rules: %w", err))
 	}
-	url, verr := launch.Validate(input)
-	s.ValidationErr = verr
-	if verr == nil {
-		s.Analysis = clean.Analyse(url, rules)
-		m.Analysis = s.Analysis
-		m.Accepted = s.Analysis.Defaults()
+	env.Builtin = rules
+	if r, err := register.System(); err == nil {
+		env.Registrar = r
 	}
+	return env, problems
+}
 
-	for _, p := range s.Problems {
+// prepare builds the inspector model for input.
+func prepare(input string) (app.Situation, *ui.Model) {
+	env, problems := loadEnv()
+	m := &ui.Model{Input: input, Env: env}
+	for _, p := range problems {
 		m.Problems = append(m.Problems, "Configuration problem: "+p.Error()+" (defaults are used instead)")
 	}
-	switch {
-	case verr != nil:
-		m.Blocker = "This link cannot be opened: only http and https links are accepted."
-	case len(s.Browsers) == 0:
-		m.Blocker = "No web browsers were found on this system."
+	url, verr := launch.Validate(input)
+	if verr != nil {
+		m.Invalid = true
+	} else {
+		m.Analysis = clean.Analyse(url, env.Rules())
+		m.Accepted = m.Analysis.Defaults()
 	}
+	m.Refresh()
 	m.Open = func(b discovery.Browser, url string) error {
-		if dir == "" {
+		if env.ConfigDir == "" {
 			return launch.Start(b, url)
 		}
-		return app.Open(dir, st, b, url, launch.Start)
+		return app.Open(env.ConfigDir, env.State, b, url, launch.Start)
+	}
+	s := app.Situation{
+		Config:        env.Config,
+		Problems:      problems,
+		ValidationErr: verr,
+		Analysis:      m.Analysis,
+		Browsers:      m.Browsers,
 	}
 	return s, m
 }

@@ -96,6 +96,7 @@ on Windows) can be deleted as well.
 bopen <url>       inspect a link and open it in a browser
 bopen register    make bopen the default handler for web links
 bopen unregister  undo 'bopen register'
+bopen settings    change bopen's preferences
 ```
 
 Keyboard: `Enter` opens, `Esc` cancels, `Up`/`Down` or `1`–`9` choose the
@@ -116,9 +117,14 @@ absolute path.
 
 ## Configuration
 
-Preferences live in `config.toml` in the bopen directory of your user
-configuration directory (`~/.config/bopen/` on Linux,
-`%AppData%\bopen\` on Windows):
+Open the settings with the cog icon in the inspector, or run
+`bopen settings`. There you can choose when the inspector appears, hide and
+reorder browsers, switch individual built-in rules off, and register bopen
+again if another browser has taken over. Changes are saved immediately.
+
+The settings are stored in `config.toml` in the bopen directory of your user
+configuration directory (`~/.config/bopen/` on Linux, `%AppData%\bopen\`
+on Windows):
 
 ```toml
 # "always" (default) shows the inspector for every link.
@@ -126,7 +132,47 @@ configuration directory (`~/.config/bopen/` on Linux,
 # last-used browser and shows the inspector only when there is something
 # to suggest.
 window = "always"
+
+[browsers]
+hidden = ["firefox.desktop"]                              # not offered
+order  = ["app.zen_browser.zen.desktop", "brave-browser.desktop"]  # shown first
+
+[rules]
+disabled = ["utm"]                                        # built-in rule ids
 ```
+
+Browsers are identified by their desktop file ID on Linux and their
+registered name on Windows; entries for browsers that are not installed are
+kept, so a reinstalled browser keeps its settings. The file belongs to the
+settings screen: it can be edited by hand, but comments are not kept when the
+settings screen saves it.
+
+### Your own rules
+
+Right-click any parameter in the inspector's link and choose
+**Always flag "…"** to add a rule for it: the parameter name (a trailing `*`
+matches a prefix), whether it applies to this host only or to any host,
+whether it is tracking (removed by default) or affiliate (kept by default),
+and a reason, which is required and shown next to every suggestion it makes.
+Right-clicking a suggestion offers **Disable this rule** for built-in rules
+and **Edit this rule…** for your own. The settings screen lists your rules
+under **Your rules**, where they can be added, edited (including wildcard
+hosts such as `*.example.com`) and deleted.
+
+Your rules take precedence over the built-in ones for the same parameter.
+They are stored in `config.toml`:
+
+```toml
+[[rules.user]]
+id     = "u-3f9a1c"              # assigned by bopen
+kind   = "tracking"              # or "affiliate"
+param  = "ref"
+hosts  = ["news.example.com"]    # omit for any host
+reason = "Referrer tracking on this news site."
+```
+
+A rule without a reason or parameter, or with another kind, is ignored and
+reported when bopen starts.
 
 bopen keeps the last-used browser in `state.toml` next to it.
 

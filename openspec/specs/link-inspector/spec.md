@@ -92,3 +92,45 @@ This SHALL apply regardless of the `window` preference.
 #### Scenario: Launch failure in silent mode
 - **WHEN** `window` is `when-suggestions`, the link is clean, and launching the pre-selected browser fails
 - **THEN** the inspector window is shown with the error
+
+### Requirement: Settings entry point
+The inspector window SHALL show a cog control that opens the settings view.
+
+#### Scenario: Cog opens settings
+- **WHEN** the user activates the cog control
+- **THEN** the settings view is shown in the same window
+
+### Requirement: Browser list honours visibility and order
+The inspector SHALL NOT offer hidden browsers, and SHALL order the remaining browsers by the configured order. Pre-selection SHALL skip any candidate that is hidden. When all discovered browsers are hidden, the inspector SHALL report that no browsers are available and offer the settings view.
+
+#### Scenario: Last-used browser hidden
+- **WHEN** the last-used browser is Firefox and Firefox is hidden
+- **THEN** Firefox is not offered, and pre-selection continues with the next candidate
+
+#### Scenario: All browsers hidden
+- **WHEN** every discovered browser is hidden
+- **THEN** the inspector reports that no browsers are available and does not offer to open the link
+
+### Requirement: Flag a parameter from the inspector
+Right-clicking a query parameter in the displayed URL, including parameters inside an unwrapped redirect target, SHALL offer "Always flag this parameter…". Choosing it SHALL open a form with these fields:
+- **Parameter:** pre-filled with the parameter name and editable, so a trailing `*` can make it a prefix.
+- **Scope:** "this host" (the host of the URL containing the parameter) or "any host".
+- **Kind:** `tracking` (default) or `affiliate`.
+- **Reason:** required.
+
+Saving SHALL store the rule and re-analyse the link immediately, preserving toggles of suggestions that still exist.
+
+#### Scenario: Flagging an unknown parameter
+- **WHEN** the user right-clicks `ref=home` in `https://news.example.com/a?ref=home`, chooses "Always flag this parameter…", enters a reason and saves
+- **THEN** a user rule for `ref` scoped to `news.example.com` is stored, and `ref=home` immediately appears as a highlighted suggestion
+
+#### Scenario: Reason is mandatory
+- **WHEN** the user tries to save the form with an empty reason
+- **THEN** the rule is not saved, and the form indicates that a reason is required
+
+### Requirement: Act on an existing suggestion
+Right-clicking a suggestion SHALL offer "Disable this rule" for a built-in suggestion and "Edit this rule…" for a user suggestion. Disabling SHALL record the built-in rule as disabled and re-analyse the link.
+
+#### Scenario: Disabling a built-in rule from the inspector
+- **WHEN** the user right-clicks the `utm_source` suggestion and chooses "Disable this rule"
+- **THEN** the `utm_*` rule is recorded as disabled and its suggestions disappear from the inspector

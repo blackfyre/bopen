@@ -94,6 +94,16 @@ func (l Linux) Register() (string, error) {
 	return msg, nil
 }
 
+// IsDefault reports whether bopen is the default https handler. known is
+// false when that cannot be determined.
+func (l Linux) IsDefault() (isDefault, known bool) {
+	current, err := l.xdgMime("query", "default", "x-scheme-handler/https")
+	if err != nil {
+		return false, false
+	}
+	return current == discovery.SelfDesktopID, true
+}
+
 // Unregister removes bopen.desktop and restores the recorded previous
 // default when it is still installed.
 func (l Linux) Unregister() (string, error) {

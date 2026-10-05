@@ -106,3 +106,46 @@ The cleaned URL SHALL apply exactly the accepted suggestions. Rejecting a redire
 #### Scenario: Empty query removed
 - **WHEN** `https://example.com/a?fbclid=x` is cleaned with all suggestions accepted
 - **THEN** the result is `https://example.com/a`
+
+### Requirement: Built-in rules have stable identifiers
+Every built-in rule SHALL have a unique identifier that does not change between releases while the rule exists.
+
+#### Scenario: Identifier uniqueness
+- **WHEN** the built-in rule set is loaded
+- **THEN** no two rules share an identifier
+
+### Requirement: Disabled rules are not applied
+A built-in rule whose identifier is listed as disabled SHALL NOT produce suggestions.
+
+#### Scenario: Disabled tracking rule
+- **WHEN** the `fbclid` rule is disabled and `https://example.com/?fbclid=x` is analysed
+- **THEN** no suggestion is produced
+
+#### Scenario: Disabled redirect rule
+- **WHEN** the Google redirect rule is disabled and a Google wrapper URL is analysed
+- **THEN** no redirect suggestion is produced
+
+### Requirement: User rules produce suggestions
+User rules of kind `tracking` or `affiliate` SHALL be applied with the same matching semantics as built-in parameter rules: case-insensitive names, trailing `*` as a prefix match, and an optional host scope. Their suggestions SHALL carry source `user` and the user's reason. User rules of kind `redirect` SHALL NOT be supported.
+
+#### Scenario: User rule on a specific host
+- **WHEN** a user rule flags `ref` on host `news.example.com` with the reason "Referrer tracking", and `https://news.example.com/a?ref=home` is analysed
+- **THEN** a `tracking` suggestion with source `user` and reason "Referrer tracking" covers `ref=home`
+
+#### Scenario: Host scope respected
+- **WHEN** the same rule exists and `https://other.example.com/a?ref=home` is analysed
+- **THEN** no suggestion covers `ref=home`
+
+### Requirement: Invalid user rules are ignored and reported
+A user rule with an empty reason, an empty parameter, or an unsupported kind SHALL NOT be applied. It SHALL be reported as a configuration problem in the same way as other invalid preferences.
+
+#### Scenario: Rule without reason
+- **WHEN** `config.toml` contains a user rule with an empty reason
+- **THEN** the rule is not applied, and the inspector shows a configuration problem naming that rule
+
+### Requirement: One suggestion per span with source precedence
+When rules from several sources match the same span, exactly one suggestion SHALL be produced, taken from the highest-precedence source: `user` before `builtin`. A disabled built-in rule SHALL NOT take part in precedence.
+
+#### Scenario: User rule overrides built-in reason
+- **WHEN** a user rule flags `fbclid` with the reason "Facebook tracking, always remove" and a link contains `fbclid=x`
+- **THEN** a single suggestion covers `fbclid=x`, with source `user` and the user's reason

@@ -34,7 +34,7 @@ func keyedWindow(t *testing.T) (*window, *input.Router, *[]string) {
 	m.Browsers = []discovery.Browser{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}, {ID: "c", Name: "C"}}
 	var opened []string
 	m.Open = func(b discovery.Browser, url string) error { opened = append(opened, b.ID+" "+url); return nil }
-	w := newWindow(m)
+	w := newWindow(m, m.Env)
 	router := new(input.Router)
 	frame(w, router)
 	return w, router, &opened

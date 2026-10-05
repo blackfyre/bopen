@@ -14,6 +14,9 @@ func TestBuiltinRulesValid(t *testing.T) {
 		if strings.TrimSpace(r.Reason) == "" {
 			t.Errorf("rule %d has no reason", i)
 		}
+		if r.ID == "" {
+			t.Errorf("rule %d has no id", i)
+		}
 		if r.Source != SourceBuiltin {
 			t.Errorf("rule %d source = %q", i, r.Source)
 		}
@@ -60,11 +63,13 @@ func TestBuiltinRulesRequiredPresent(t *testing.T) {
 
 func TestParseRulesRejectsInvalid(t *testing.T) {
 	for name, data := range map[string]string{
-		"no reason":    "[[rule]]\nkind = \"tracking\"\nparam = \"x\"\n",
-		"no param":     "[[rule]]\nkind = \"tracking\"\nreason = \"r\"\n",
-		"unknown kind": "[[rule]]\nkind = \"other\"\nparam = \"x\"\nreason = \"r\"\n",
-		"no target":    "[[rule]]\nkind = \"redirect\"\nhosts = [\"a.com\"]\nreason = \"r\"\n",
-		"bad glob":     "[[rule]]\nkind = \"tracking\"\nparam = \"x\"\nhosts = [\"[\"]\nreason = \"r\"\n",
+		"no id":        "[[rule]]\nkind = \"tracking\"\nparam = \"x\"\nreason = \"r\"\n",
+		"no reason":    "[[rule]]\nid = \"a\"\nkind = \"tracking\"\nparam = \"x\"\n",
+		"no param":     "[[rule]]\nid = \"a\"\nkind = \"tracking\"\nreason = \"r\"\n",
+		"unknown kind": "[[rule]]\nid = \"a\"\nkind = \"other\"\nparam = \"x\"\nreason = \"r\"\n",
+		"no target":    "[[rule]]\nid = \"a\"\nkind = \"redirect\"\nhosts = [\"a.com\"]\nreason = \"r\"\n",
+		"bad glob":     "[[rule]]\nid = \"a\"\nkind = \"tracking\"\nparam = \"x\"\nhosts = [\"[\"]\nreason = \"r\"\n",
+		"duplicate id": "[[rule]]\nid = \"a\"\nkind = \"tracking\"\nparam = \"x\"\nreason = \"r\"\n[[rule]]\nid = \"a\"\nkind = \"tracking\"\nparam = \"y\"\nreason = \"r\"\n",
 	} {
 		if _, err := ParseRules(data, SourceBuiltin); err == nil {
 			t.Errorf("%s: expected error", name)

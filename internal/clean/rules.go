@@ -24,10 +24,15 @@ const (
 // Source names where a rule came from.
 type Source string
 
-const SourceBuiltin Source = "builtin"
+const (
+	SourceBuiltin Source = "builtin"
+	SourceUser    Source = "user"
+)
 
 // Rule describes one tracking parameter, affiliate parameter or redirect wrapper.
 type Rule struct {
+	// ID identifies a built-in rule in the user's configuration.
+	ID     string   `toml:"id"`
 	Kind   Kind     `toml:"kind"`
 	Param  string   `toml:"param"`
 	Hosts  []string `toml:"hosts"`
@@ -79,17 +84,47 @@ func ParseRules(data string, source Source) ([]Rule, error) {
 	if _, err := toml.Decode(data, &file); err != nil {
 		return nil, err
 	}
+	seen := map[string]bool{}
 	for i := range file.Rule {
 		r := &file.Rule[i]
 		r.Source = source
 		if err := r.validate(); err != nil {
 			return nil, fmt.Errorf("rule %d: %w", i+1, err)
 		}
+		if seen[r.ID] {
+			return nil, fmt.Errorf("rule %d: duplicate id %q", i+1, r.ID)
+		}
+		seen[r.ID] = true
 	}
 	return file.Rule, nil
 }
 
+// Combine concatenates rule sources in precedence order. Analyse applies the
+// first matching rule, so a source listed earlier wins over later ones for
+// the same parameter.
+func Combine(sources ...[]Rule) []Rule {
+	var out []Rule
+	for _, src := range sources {
+		out = append(out, src...)
+	}
+	return out
+}
+
+// Enabled returns rules without those whose ID is disabled.
+func Enabled(rules []Rule, disabled func(id string) bool) []Rule {
+	out := make([]Rule, 0, len(rules))
+	for _, r := range rules {
+		if !disabled(r.ID) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 func (r Rule) validate() error {
+	if strings.TrimSpace(r.ID) == "" {
+		return fmt.Errorf("missing id")
+	}
 	if strings.TrimSpace(r.Reason) == "" {
 		return fmt.Errorf("missing reason")
 	}

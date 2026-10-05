@@ -158,3 +158,57 @@ func TestRedirectDepthLimit(t *testing.T) {
 		t.Fatalf("cleaned %q, want the innermost unexpanded wrapper", got)
 	}
 }
+
+func analyseWithout(t *testing.T, raw string, disabled ...string) *Analysis {
+	t.Helper()
+	rules, err := Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	off := func(id string) bool {
+		for _, d := range disabled {
+			if d == id {
+				return true
+			}
+		}
+		return false
+	}
+	return Analyse(raw, Enabled(rules, off))
+}
+
+func TestDisabledTrackingRule(t *testing.T) {
+	if a := analyseWithout(t, "https://example.com/?fbclid=x", "fbclid"); len(a.Suggestions) != 0 {
+		t.Fatalf("suggestions = %+v", a.Suggestions)
+	}
+	if a := analyseWithout(t, "https://example.com/?fbclid=x", "no-such-rule"); len(a.Suggestions) != 1 {
+		t.Fatalf("unknown disabled id changed the result: %+v", a.Suggestions)
+	}
+}
+
+func TestDisabledRedirectRule(t *testing.T) {
+	a := analyseWithout(t, "https://www.google.com/url?q="+url.QueryEscape("https://example.com/"), "redirect-google")
+	for _, s := range a.Suggestions {
+		if s.Kind == KindRedirect {
+			t.Fatalf("unexpected redirect %+v", s)
+		}
+	}
+}
+
+func TestParamsRecordedWithHosts(t *testing.T) {
+	raw := "https://www.google.com/url?q=" + url.QueryEscape("https://shop.example.com/item?ref=home&fbclid=x") + "&sa=D"
+	a := analyse(t, raw)
+	byName := map[string]Param{}
+	for _, p := range a.Params {
+		byName[p.Name] = p
+	}
+	ref, ok := byName["ref"]
+	if !ok || ref.Host != "shop.example.com" || ref.Suggestion != -1 || a.URL[ref.Start:ref.End] != "ref%3Dhome" {
+		t.Fatalf("ref = %+v", ref)
+	}
+	if sa := byName["sa"]; sa.Host != "www.google.com" {
+		t.Fatalf("sa = %+v", sa)
+	}
+	if fb := byName["fbclid"]; fb.Suggestion < 0 || a.Suggestions[fb.Suggestion].RuleID != "fbclid" {
+		t.Fatalf("fbclid = %+v", fb)
+	}
+}

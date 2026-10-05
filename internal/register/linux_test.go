@@ -131,3 +131,24 @@ func TestLinuxRegisterWithoutXDGMime(t *testing.T) {
 		t.Fatal("desktop file written despite missing xdg-mime")
 	}
 }
+
+func TestLinuxIsDefault(t *testing.T) {
+	l, xdg := newLinux(t)
+	if isDefault, known := l.IsDefault(); isDefault || !known {
+		t.Fatalf("before register: %v %v", isDefault, known)
+	}
+	if _, err := l.Register(); err != nil {
+		t.Fatal(err)
+	}
+	if isDefault, known := l.IsDefault(); !isDefault || !known {
+		t.Fatalf("after register: %v %v", isDefault, known)
+	}
+	xdg.defaults["x-scheme-handler/https"] = "firefox.desktop"
+	if isDefault, _ := l.IsDefault(); isDefault {
+		t.Fatal("another browser took over but bopen reported as default")
+	}
+	l.LookPath = func(string) (string, error) { return "", errors.New("missing") }
+	if _, known := l.IsDefault(); known {
+		t.Fatal("status known without xdg-mime")
+	}
+}

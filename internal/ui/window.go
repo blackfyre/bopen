@@ -25,6 +25,7 @@ import (
 	"gioui.org/x/styledtext"
 
 	"github.com/blackfyre/bopen/internal/clean"
+	"golang.org/x/exp/shiny/materialdesign/icons"
 )
 
 var (
@@ -67,8 +68,18 @@ func sourceLabel(s clean.Source) string {
 	return string(s) + " rule"
 }
 
+type view int
+
+const (
+	viewInspector view = iota
+	viewSettings
+)
+
 type window struct {
+	// m is nil when bopen runs as `bopen settings`.
 	m        *Model
+	env      *Env
+	view     view
 	th       *material.Theme
 	list     widget.List
 	urlText  richtext.InteractiveText
@@ -76,17 +87,48 @@ type window struct {
 	browsers widget.Enum
 	open     widget.Clickable
 	cancel   widget.Clickable
+	cog      widget.Clickable
 	result   widget.Selectable
-	done     bool
+	settings settingsView
+	form     ruleForm
+	menus    inspectorMenus
+	// notice reports a failed inspector action.
+	notice string
+	done   bool
+}
+
+var (
+	iconSettings = mustIcon(icons.ActionSettings)
+	iconBack     = mustIcon(icons.NavigationArrowBack)
+)
+
+func mustIcon(data []byte) *widget.Icon {
+	ic, err := widget.NewIcon(data)
+	if err != nil {
+		panic(err)
+	}
+	return ic
 }
 
 // Run shows the inspector for m and exits the process when it closes.
 // It never returns.
 func Run(m *Model) {
+	run(newWindow(m, m.Env))
+}
+
+// RunSettings shows only the settings view and exits when it closes.
+// It never returns.
+func RunSettings(env *Env) {
+	w := newWindow(nil, env)
+	w.openSettings()
+	run(w)
+}
+
+func run(win *window) {
 	go func() {
 		w := new(app.Window)
 		w.Option(app.Title("bopen"), app.Size(unit.Dp(760), unit.Dp(600)), app.MinSize(unit.Dp(420), unit.Dp(320)))
-		if err := newWindow(m).loop(w); err != nil {
+		if err := win.loop(w); err != nil {
 			fmt.Fprintln(os.Stderr, "bopen:", err)
 			os.Exit(1)
 		}
@@ -95,17 +137,41 @@ func Run(m *Model) {
 	app.Main()
 }
 
-func newWindow(m *Model) *window {
+func newWindow(m *Model, env *Env) *window {
 	th := material.NewTheme()
 	th.Shaper = text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
-	w := &window{m: m, th: th}
+	w := &window{m: m, env: env, th: th}
 	w.list.Axis = layout.Vertical
-	w.toggles = make([]widget.Bool, len(m.Accepted))
-	for i, a := range m.Accepted {
+	w.settings.list.Axis = layout.Vertical
+	w.syncInspector()
+	return w
+}
+
+// syncInspector copies the model's toggles and selection into the widgets.
+func (w *window) syncInspector() {
+	if w.m == nil {
+		return
+	}
+	w.toggles = make([]widget.Bool, len(w.m.Accepted))
+	for i, a := range w.m.Accepted {
 		w.toggles[i].Value = a
 	}
-	w.browsers.Value = strconv.Itoa(m.Selected)
-	return w
+	w.browsers.Value = strconv.Itoa(w.m.Selected)
+	if w.m.Analysis != nil {
+		w.menus.reset(len(w.m.Analysis.Suggestions))
+	}
+}
+
+// closeSettings returns to the inspector, re-applying the preferences, or
+// closes the window when there is no inspector.
+func (w *window) closeSettings() {
+	if w.m == nil {
+		w.done = true
+		return
+	}
+	w.m.Refresh()
+	w.syncInspector()
+	w.view = viewInspector
 }
 
 func (w *window) loop(win *app.Window) error {
@@ -128,6 +194,26 @@ func (w *window) loop(win *app.Window) error {
 
 // handle processes keyboard shortcuts and widget state changes.
 func (w *window) handle(gtx layout.Context) {
+	if w.form.open {
+		if r, ok := w.handleForm(gtx); ok {
+			w.saveRule(r)
+		}
+		return
+	}
+	if w.view == viewSettings {
+		w.handleSettings(gtx)
+		return
+	}
+	if w.cog.Clicked(gtx) {
+		w.openSettings()
+		return
+	}
+	if w.m.Analysis != nil {
+		w.handleMenus(gtx)
+		if w.form.open {
+			return
+		}
+	}
 	filters := []event.Filter{
 		key.Filter{Name: key.NameReturn}, key.Filter{Name: key.NameEnter},
 		key.Filter{Name: key.NameEscape},
@@ -181,6 +267,19 @@ func (w *window) handle(gtx layout.Context) {
 
 func (w *window) layout(gtx layout.Context) layout.Dimensions {
 	paint.Fill(gtx.Ops, w.th.Palette.Bg)
+	var dims layout.Dimensions
+	if w.view == viewSettings {
+		dims = w.layoutSettings(gtx)
+	} else {
+		dims = w.layoutInspector(gtx)
+	}
+	if w.form.open {
+		w.layoutForm(gtx)
+	}
+	return dims
+}
+
+func (w *window) layoutInspector(gtx layout.Context) layout.Dimensions {
 	var sections []layout.Widget
 	for _, p := range w.m.Problems {
 		sections = append(sections, w.banner(p, colWarning))
@@ -191,14 +290,17 @@ func (w *window) layout(gtx layout.Context) layout.Dimensions {
 	if w.m.LaunchError != "" {
 		sections = append(sections, w.banner(w.m.LaunchError, colError))
 	}
-	sections = append(sections, w.heading("Link"), w.link)
+	if w.notice != "" {
+		sections = append(sections, w.banner(w.notice, colError))
+	}
+	sections = append(sections, w.headerRow("Link", &w.cog, iconSettings, "Settings"), w.link)
 	if w.m.Analysis != nil {
 		sections = append(sections, w.heading("Suggested changes"))
 		if len(w.m.Analysis.Suggestions) == 0 {
 			sections = append(sections, w.muted("Nothing to remove."))
 		}
 		for i := range w.m.Analysis.Suggestions {
-			sections = append(sections, w.suggestion(i))
+			sections = append(sections, w.withRowMenu(i, w.suggestion(i)))
 		}
 		sections = append(sections, w.heading("Result"), w.resultURL)
 	}
@@ -216,6 +318,22 @@ func (w *window) layout(gtx layout.Context) layout.Dimensions {
 		}),
 		layout.Rigid(w.buttons),
 	)
+}
+
+// headerRow is a heading with an icon button at the right edge.
+func (w *window) headerRow(title string, btn *widget.Clickable, icon *widget.Icon, description string) layout.Widget {
+	return func(gtx layout.Context) layout.Dimensions {
+		return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+			layout.Flexed(1, w.heading(title)),
+			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+				b := material.IconButton(w.th, btn, icon, description)
+				b.Size = unit.Dp(20)
+				b.Inset = layout.UniformInset(unit.Dp(6))
+				b.Background = colMuted
+				return b.Layout(gtx)
+			}),
+		)
+	}
 }
 
 func (w *window) heading(s string) layout.Widget {
@@ -249,9 +367,27 @@ func (w *window) banner(s string, bg color.NRGBA) layout.Widget {
 }
 
 func (w *window) link(gtx layout.Context) layout.Dimensions {
+	if w.m.Analysis == nil {
+		return w.linkText(gtx)
+	}
+	return layout.Stack{}.Layout(gtx,
+		layout.Stacked(w.linkText),
+		layout.Expanded(func(gtx layout.Context) layout.Dimensions {
+			return w.menus.link.Layout(gtx, w.linkMenu)
+		}),
+	)
+}
+
+func (w *window) linkText(gtx layout.Context) layout.Dimensions {
 	var spans []richtext.SpanStyle
 	for _, r := range w.m.runs() {
 		s := richtext.SpanStyle{Content: r.text, Size: unit.Sp(15), Color: kindColour(r.kind), Font: font.Font{Typeface: "Go Mono"}}
+		if r.param >= 0 {
+			// Parameters are interactive so their hover state tells the
+			// right-click menu which parameter it is for.
+			s.Interactive = true
+			s.Set("param", r.param)
+		}
 		if r.kind != "" {
 			if r.accepted {
 				s.Font.Weight = font.Bold

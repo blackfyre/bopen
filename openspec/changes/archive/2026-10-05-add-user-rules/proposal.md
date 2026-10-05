@@ -28,4 +28,4 @@ None.
 
 - Depends on `add-link-inspector-core` and `add-settings-view`, which must be archived first.
 - Touches `internal/clean` (rule sources and precedence), `internal/prefs` (rule list and mutations), and `internal/ui` (context menus, rule form, settings section).
-- New dependency: `gioui.org/x/component` for context menus.
+- Uses `gioui.org/x/component` for context menus; `gioui.org/x` is already a dependency (added by `add-link-inspector-core` for the highlighted link).
