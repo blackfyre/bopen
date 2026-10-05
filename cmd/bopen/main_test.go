@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseArgs(t *testing.T) {
 	for _, tc := range []struct {
@@ -19,5 +22,14 @@ func TestParseArgs(t *testing.T) {
 		if got := parseArgs(tc.args); got != tc.want {
 			t.Errorf("%q: got %v, want %v", tc.args, got, tc.want)
 		}
+	}
+}
+
+func TestUsageShowsVersion(t *testing.T) {
+	old := version
+	defer func() { version = old }()
+	version = "0.1.0"
+	if got := usageText(); !strings.HasPrefix(got, "bopen 0.1.0\n") {
+		t.Fatalf("usage = %q", got)
 	}
 }

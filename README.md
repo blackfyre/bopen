@@ -15,6 +15,65 @@ Installed browsers are discovered automatically: on Linux from desktop
 entries (system packages, Flatpak, Snap and per-user installs), on Windows
 from the registered browsers.
 
+## Installing
+
+### Linux
+
+```
+curl -fsSL https://raw.githubusercontent.com/blackfyre/bopen/main/install.sh | sh
+```
+
+The script downloads the latest release, verifies it against the release's
+`checksums.txt`, and installs `bopen` into `~/.local/bin` without root. It
+does not change your default browser; run `bopen register` afterwards.
+
+To read the script before running it:
+
+```
+curl -fsSLO https://raw.githubusercontent.com/blackfyre/bopen/main/install.sh
+less install.sh
+sh install.sh
+```
+
+Options, as environment variables:
+
+- `BOPEN_VERSION=v0.1.0` installs a specific release instead of the latest.
+- `BOPEN_INSTALL_DIR=/some/dir` installs somewhere other than `~/.local/bin`.
+
+Run the script again to upgrade.
+
+Packages are published with each release as well, and pull in the runtime
+libraries:
+
+```
+# Debian/Ubuntu
+curl -fsSLO https://github.com/blackfyre/bopen/releases/latest/download/bopen_linux_amd64.deb
+sudo apt install ./bopen_linux_amd64.deb
+
+# Fedora/openSUSE
+sudo dnf install https://github.com/blackfyre/bopen/releases/latest/download/bopen_linux_amd64.rpm
+```
+
+The Linux binary is built for x86-64 and needs glibc 2.35 or newer (Ubuntu
+22.04, Debian 12, Fedora 36 and later) and the usual Wayland, X11, EGL and
+xkbcommon libraries that every desktop already has. No `aarch64` binary is
+published yet; build from source instead.
+
+### Windows
+
+Download `bopen_windows_amd64.zip` (or `bopen_windows_arm64.zip`) from the
+[latest release](https://github.com/blackfyre/bopen/releases/latest), put
+`bopen.exe` somewhere permanent, and run `bopen.exe register` from a terminal
+in that folder. The executable is not code-signed yet, so SmartScreen may warn
+on first start.
+
+### Uninstalling
+
+Run `bopen unregister` first, so your previous default browser is restored,
+then delete the binary (`~/.local/bin/bopen` when installed by the script) or
+remove the package. Preferences in `~/.config/bopen/` (`%AppData%\bopen\`
+on Windows) can be deleted as well.
+
 ## Usage
 
 ```
@@ -86,6 +145,23 @@ go test ./...
 
 The Windows build needs no C toolchain and can be cross-compiled from Linux.
 `-H=windowsgui` stops a console window flashing up on every link.
+
+`goreleaser release --snapshot --clean` builds every release asset into
+`dist/` without publishing anything, and `scripts/test-install.sh` tests
+`install.sh` against a local server. `mise install` provides GoReleaser,
+ShellCheck and actionlint.
+
+## Releasing
+
+Releases are built by GitHub Actions when a version tag is pushed:
+
+```
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The workflow runs the tests, then GoReleaser publishes the archives, `.deb`
+and `.rpm` packages and `checksums.txt` to the GitHub release.
 
 ## Licence
 

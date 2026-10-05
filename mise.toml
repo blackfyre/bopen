@@ -1,2 +1,5 @@
 [tools]
+actionlint = "latest"
 go = "latest"
+goreleaser = "latest"
+shellcheck = "latest"

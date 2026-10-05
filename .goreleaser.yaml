@@ -1,0 +1,96 @@
+# GoReleaser configuration: `goreleaser release --snapshot --clean` builds
+# every release asset locally into dist/; pushing a v* tag publishes them.
+version: 2
+
+project_name: bopen
+
+builds:
+  # Gio links against the system Wayland/X11/EGL libraries, so the Linux
+  # build needs cgo and the development packages on the build host.
+  - id: linux
+    main: ./cmd/bopen
+    binary: bopen
+    goos: [linux]
+    goarch: [amd64]
+    env: [CGO_ENABLED=1]
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{ .Version }}"]
+  # The Windows build needs no C toolchain. -H=windowsgui avoids a console
+  # window on every clicked link.
+  - id: windows
+    main: ./cmd/bopen
+    binary: bopen
+    goos: [windows]
+    goarch: [amd64, arm64]
+    env: [CGO_ENABLED=0]
+    flags: [-trimpath]
+    ldflags: ["-s -w -H=windowsgui -X main.version={{ .Version }}"]
+
+archives:
+  # Version-less names keep releases/latest/download/<asset> URLs stable.
+  - id: default
+    ids: [linux, windows]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files: [LICENSE, README.md]
+
+nfpms:
+  - id: packages
+    ids: [linux]
+    package_name: bopen
+    file_name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    homepage: https://github.com/blackfyre/bopen
+    maintainer: bopen maintainers <https://github.com/blackfyre/bopen>
+    description: >-
+      Link inspector registered as the default browser: highlights tracking
+      parameters and redirect wrappers with reasons, then opens the link in the
+      browser you choose.
+    license: MIT
+    formats: [deb, rpm]
+    bindir: /usr/bin
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/bopen/LICENSE
+      - src: README.md
+        dst: /usr/share/doc/bopen/README.md
+    overrides:
+      deb:
+        dependencies:
+          - libegl1
+          - libwayland-client0
+          - libwayland-cursor0
+          - libwayland-egl1
+          - libx11-6
+          - libx11-xcb1
+          - libxkbcommon0
+          - libxkbcommon-x11-0
+          - libxcursor1
+          - libxfixes3
+      rpm:
+        dependencies:
+          - libglvnd-egl
+          - libwayland-client
+          - libwayland-cursor
+          - libwayland-egl
+          - libX11
+          - libX11-xcb
+          - libxkbcommon
+          - libxkbcommon-x11
+          - libXcursor
+          - libXfixes
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  sort: asc
+
+release:
+  github:
+    owner: blackfyre
+    name: bopen
+  prerelease: auto

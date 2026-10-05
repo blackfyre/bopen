@@ -16,6 +16,13 @@ import (
 	"github.com/blackfyre/bopen/internal/ui"
 )
 
+// version is set at release time with -ldflags "-X main.version=...".
+var version = "dev"
+
+func usageText() string {
+	return "bopen " + version + "\n" + usage
+}
+
 const usage = `usage:
   bopen <url>       inspect a link and open it in a browser
   bopen register    make bopen the default handler for web links
@@ -50,7 +57,7 @@ func main() {
 	switch parseArgs(os.Args[1:]) {
 	case modeUsage:
 		attachConsole()
-		fmt.Fprint(os.Stderr, usage)
+		fmt.Fprint(os.Stderr, usageText())
 		os.Exit(2)
 	case modeRegister, modeUnregister:
 		attachConsole()

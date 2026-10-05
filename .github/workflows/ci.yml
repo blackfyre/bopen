@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    # The oldest supported image sets the glibc baseline of release builds;
+    # CI uses the same one.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install Gio build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev \
+            libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev
+
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
+      - name: go vet
+        run: |
+          go vet ./...
+          GOOS=windows go vet ./...
+
+      - name: go test
+        run: go test ./...
+
+      - name: Windows build
+        run: GOOS=windows go build -ldflags -H=windowsgui -o /dev/null ./cmd/bopen
+
+      - name: goreleaser check
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: check
+
+      - name: shellcheck
+        run: shellcheck install.sh scripts/test-install.sh
+
+      - name: install.sh tests
+        run: scripts/test-install.sh
