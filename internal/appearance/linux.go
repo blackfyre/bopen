@@ -4,6 +4,9 @@ package appearance
 
 import (
 	"context"
+	"errors"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -22,21 +25,50 @@ const (
 // Read returns the host appearance from the XDG desktop portal, or the
 // defaults (light, no accent) when the portal is unavailable.
 func Read() Settings {
-	conn, err := dbus.SessionBus()
+	conn, err := sessionBus(os.Getenv)
 	if err != nil {
 		return Settings{}
 	}
+	defer conn.Close()
 	return readFrom(conn)
 }
 
 // Watch calls changed with the new appearance whenever the portal reports
 // a change in the appearance namespace, until ctx ends.
 func Watch(ctx context.Context, changed func(Settings)) {
-	conn, err := dbus.SessionBus()
+	conn, err := sessionBus(os.Getenv)
 	if err != nil {
 		return
 	}
+	go func() {
+		<-ctx.Done()
+		conn.Close()
+	}()
 	watchOn(ctx, conn, changed)
+}
+
+// sessionAddress returns the address of an already running session bus.
+// Unlike dbus.SessionBus it never falls back to dbus-launch, which would
+// start a new bus daemon on systems without one.
+func sessionAddress(getenv func(string) string) (string, bool) {
+	if addr := getenv("DBUS_SESSION_BUS_ADDRESS"); addr != "" {
+		return addr, true
+	}
+	if dir := getenv("XDG_RUNTIME_DIR"); dir != "" {
+		path := filepath.Join(dir, "bus")
+		if fi, err := os.Stat(path); err == nil && fi.Mode()&os.ModeSocket != 0 {
+			return "unix:path=" + path, true
+		}
+	}
+	return "", false
+}
+
+func sessionBus(getenv func(string) string) (*dbus.Conn, error) {
+	addr, ok := sessionAddress(getenv)
+	if !ok {
+		return nil, errors.New("no session bus")
+	}
+	return dbus.Connect(addr)
 }
 
 func readFrom(conn *dbus.Conn) Settings {

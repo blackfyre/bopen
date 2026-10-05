@@ -14,9 +14,9 @@ jobs:
     # CI uses the same one.
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -42,7 +42,7 @@ jobs:
         run: GOOS=windows go build -ldflags -H=windowsgui -o /dev/null ./cmd/bopen
 
       - name: goreleaser check
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
           args: check
@@ -52,3 +52,25 @@ jobs:
 
       - name: install.sh tests
         run: scripts/test-install.sh
+
+  windows:
+    runs-on: windows-latest
+    env:
+      # Enables tests that write to the real registry (HKCU), including
+      # bopen's own registration; they skip everywhere else.
+      BOPEN_WINDOWS_INTEGRATION: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./...
+
+      - name: GUI build
+        run: go build -ldflags -H=windowsgui -o bopen.exe ./cmd/bopen

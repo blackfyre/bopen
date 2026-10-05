@@ -167,3 +167,40 @@ func TestWatchReportsChanges(t *testing.T) {
 		t.Fatal("no change reported")
 	}
 }
+
+func TestNoSessionBusMeansDefaultsWithoutDbusLaunch(t *testing.T) {
+	env := map[string]string{"XDG_RUNTIME_DIR": t.TempDir()}
+	if _, ok := sessionAddress(func(k string) string { return env[k] }); ok {
+		t.Fatal("found a bus where there is none")
+	}
+	// With PATH pointing nowhere, a dbus-launch fallback would fail loudly;
+	// Read must return the defaults quickly instead.
+	t.Setenv("DBUS_SESSION_BUS_ADDRESS", "")
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+	start := time.Now()
+	if got := Read(); got != (Settings{}) || time.Since(start) > 250*time.Millisecond {
+		t.Fatalf("got %+v after %v", got, time.Since(start))
+	}
+}
+
+func TestSessionAddressFromRuntimeDir(t *testing.T) {
+	addr := privateBus(t)
+	path := strings.TrimPrefix(strings.Split(addr, ",")[0], "unix:path=")
+	if !strings.HasPrefix(addr, "unix:path=") {
+		t.Skipf("bus address %q is not a path", addr)
+	}
+	dir := t.TempDir()
+	if err := os.Symlink(path, filepath.Join(dir, "bus")); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := sessionAddress(func(k string) string {
+		if k == "XDG_RUNTIME_DIR" {
+			return dir
+		}
+		return ""
+	})
+	if !ok || got != "unix:path="+filepath.Join(dir, "bus") {
+		t.Fatalf("got %q %v", got, ok)
+	}
+}
