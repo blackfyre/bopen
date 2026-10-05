@@ -97,6 +97,9 @@ bopen <url>       inspect a link and open it in a browser
 bopen register    make bopen the default handler for web links
 bopen unregister  undo 'bopen register'
 bopen settings    change bopen's preferences
+bopen clean [--explain] [url...]
+                  print links without tracking parts (reads stdin
+                  when no url is given)
 ```
 
 bopen follows your desktop's appearance: light or dark mode, the accent
@@ -106,7 +109,25 @@ on Windows. Changes apply while the window is open. Every text colour keeps a
 contrast ratio of at least 4.5:1 in every mode and with any accent colour.
 
 Keyboard: `Enter` opens, `Esc` cancels, `Up`/`Down` or `1`–`9` choose the
-browser, `P` toggles a private window.
+browser, `P` toggles a private window, `C` copies the cleaned link.
+
+### Cleaning without opening
+
+`bopen clean` prints links with the default suggestions applied (tracking
+parameters and redirect wrappers removed, affiliate tags kept), using the
+same rules as the inspector and without any network access. It takes links
+as arguments or, one per line, on standard input, so it works in pipes and
+editor integrations; `--explain` lists what was removed, and why, on standard
+error:
+
+```
+$ bopen clean 'https://example.com/a?utm_source=news&id=7'
+https://example.com/a?id=7
+$ wl-paste | bopen clean | wl-copy        # clean the clipboard (Wayland)
+```
+
+In the inspector, **Copy** (or `C`) puts the cleaned link on the clipboard
+without opening it.
 
 ### Registering
 

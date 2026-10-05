@@ -51,3 +51,17 @@ func TestPrivateUnavailableForUnsupportedBrowser(t *testing.T) {
 		t.Fatalf("opened %+v", *opened)
 	}
 }
+
+func TestCopyShortcutWritesClipboard(t *testing.T) {
+	w, opened := privateWindow(t)
+	router := newRouter(w)
+	press(w, router, "C")
+	frame(w, router)
+	mime, content, ok := router.WriteClipboard()
+	if !ok || mime != "application/text" || string(content) != "https://example.com/" {
+		t.Fatalf("clipboard %q %q %v", mime, content, ok)
+	}
+	if w.copied != "https://example.com/" || len(*opened) != 0 || w.done {
+		t.Fatalf("copied %q opened %v done %v", w.copied, *opened, w.done)
+	}
+}

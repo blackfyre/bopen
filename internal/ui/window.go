@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"gioui.org/app"
 	"gioui.org/font"
 	"gioui.org/font/gofont"
+	"gioui.org/io/clipboard"
 	"gioui.org/io/event"
 	"gioui.org/io/key"
 	"gioui.org/io/system"
@@ -72,6 +74,9 @@ type window struct {
 	open     widget.Clickable
 	cancel   widget.Clickable
 	cog      widget.Clickable
+	copyURL  widget.Clickable
+	// copied is the result last copied to the clipboard.
+	copied   string
 	remember widget.Bool
 	private  widget.Bool
 	result   widget.Selectable
@@ -252,7 +257,7 @@ func (w *window) handle(gtx layout.Context) {
 	for d := 1; d <= 9; d++ {
 		filters = append(filters, key.Filter{Name: key.Name(strconv.Itoa(d))})
 	}
-	filters = append(filters, key.Filter{Name: "P", Optional: key.ModShift})
+	filters = append(filters, key.Filter{Name: "P", Optional: key.ModShift}, key.Filter{Name: "C", Optional: key.ModShift})
 	for {
 		ev, ok := gtx.Event(filters...)
 		if !ok {
@@ -273,6 +278,8 @@ func (w *window) handle(gtx layout.Context) {
 			w.m.Move(1)
 		case "P":
 			w.m.SetPrivate(!w.m.Private)
+		case "C":
+			w.copyResult(gtx)
 		default:
 			if d, err := strconv.Atoi(string(ke.Name)); err == nil && d <= len(w.m.Browsers) {
 				w.m.Selected = d - 1
@@ -300,6 +307,9 @@ func (w *window) handle(gtx layout.Context) {
 		}
 	}
 	w.private.Value = w.m.Private
+	if w.copyURL.Clicked(gtx) {
+		w.copyResult(gtx)
+	}
 	if w.open.Clicked(gtx) {
 		w.done = w.openSelected() || w.done
 	}
@@ -343,7 +353,7 @@ func (w *window) layoutInspector(gtx layout.Context) layout.Dimensions {
 		for i := range w.m.Analysis.Suggestions {
 			rows = append(rows, w.withRowMenu(i, w.suggestion(i)))
 		}
-		sections = append(sections, w.card("Suggested changes", rows...), w.card("Result", w.resultURL))
+		sections = append(sections, w.card("Suggested changes", rows...), w.card("Result", w.resultRow))
 	}
 	if w.m.Blocker == "" && len(w.m.Browsers) > 0 {
 		var rows []layout.Widget
@@ -436,6 +446,28 @@ func (w *window) suggestion(i int) layout.Widget {
 	}
 }
 
+// copyResult puts the result URL on the clipboard.
+func (w *window) copyResult(gtx layout.Context) {
+	if w.m.Analysis == nil {
+		return
+	}
+	r := w.m.Result()
+	gtx.Execute(clipboard.WriteCmd{Type: "application/text", Data: io.NopCloser(strings.NewReader(r))})
+	w.copied = r
+}
+
+func (w *window) resultRow(gtx layout.Context) layout.Dimensions {
+	label := "Copy (C)"
+	if w.copied != "" && w.copied == w.m.Result() {
+		label = "Copied"
+	}
+	return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+		layout.Flexed(1, w.resultURL),
+		layout.Rigid(layout.Spacer{Width: unit.Dp(12)}.Layout),
+		layout.Rigid(w.smallButton(&w.copyURL, label, false)),
+	)
+}
+
 func (w *window) resultURL(gtx layout.Context) layout.Dimensions {
 	l := material.Body1(w.th, w.m.Result())
 	l.Font.Typeface = "Go Mono"
@@ -496,6 +528,6 @@ func (w *window) buttons(gtx layout.Context) layout.Dimensions {
 	if !w.m.CanOpen() {
 		return w.actionBar("Esc closes", w.secondaryButton(&w.cancel, "Close"))(gtx)
 	}
-	return w.actionBar("Enter opens · Esc cancels · ↑/↓ or 1–9 choose · P private",
+	return w.actionBar("Enter opens · Esc cancels · ↑/↓ 1–9 choose · P private · C copy",
 		w.secondaryButton(&w.cancel, "Cancel"), w.primaryButton(&w.open, "Open"))(gtx)
 }

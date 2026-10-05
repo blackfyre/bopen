@@ -50,6 +50,9 @@ const usage = `usage:
   bopen register    make bopen the default handler for web links
   bopen unregister  undo 'bopen register'
   bopen settings    change bopen's preferences
+  bopen clean [--explain] [url...]
+                    print links without tracking parts (reads stdin
+                    when no url is given)
 `
 
 type mode int
@@ -60,9 +63,13 @@ const (
 	modeRegister
 	modeUnregister
 	modeSettings
+	modeClean
 )
 
 func parseArgs(args []string) mode {
+	if len(args) >= 1 && args[0] == "clean" {
+		return modeClean
+	}
 	if len(args) != 1 || args[0] == "" {
 		return modeUsage
 	}
@@ -88,6 +95,13 @@ func main() {
 	case modeRegister, modeUnregister:
 		attachConsole()
 		os.Exit(runRegistration(os.Args[1], os.Stdout, os.Stderr))
+	case modeClean:
+		attachConsole()
+		env, problems := loadEnv()
+		for _, p := range problems {
+			fmt.Fprintln(os.Stderr, "bopen: configuration problem:", p)
+		}
+		os.Exit(runClean(os.Args[2:], env.Rules(), os.Stdin, os.Stdout, os.Stderr))
 	case modeSettings:
 		env, _ := loadEnv()
 		ui.RunSettings(env)

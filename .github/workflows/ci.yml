@@ -74,3 +74,13 @@ jobs:
 
       - name: GUI build
         run: go build -ldflags -H=windowsgui -o bopen.exe ./cmd/bopen
+
+      - name: bopen clean through a pipe (GUI-subsystem build)
+        shell: bash
+        run: |
+          out=$(printf 'https://example.com/?fbclid=x\nhttps://example.com/b?utm_source=y\n' | ./bopen.exe clean)
+          expected=$(printf 'https://example.com/\nhttps://example.com/b')
+          if [ "$out" != "$expected" ]; then
+            echo "got: $out"
+            exit 1
+          fi

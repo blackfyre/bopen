@@ -7,8 +7,15 @@ import (
 )
 
 // attachConsole connects a GUI-subsystem bopen to the console of the shell
-// that started it, so command-line output is visible.
+// that started it, so command-line output is visible. Standard handles that
+// are already valid, such as pipes and files, are kept, so `bopen clean`
+// works in pipelines.
 func attachConsole() {
+	stdoutOK := validStdHandle(windows.STD_OUTPUT_HANDLE)
+	stderrOK := validStdHandle(windows.STD_ERROR_HANDLE)
+	if stdoutOK && stderrOK {
+		return
+	}
 	const attachParentProcess = ^uintptr(0)
 	proc := windows.NewLazySystemDLL("kernel32.dll").NewProc("AttachConsole")
 	if ok, _, _ := proc.Call(attachParentProcess); ok == 0 {
@@ -21,5 +28,19 @@ func attachConsole() {
 		return
 	}
 	f := os.NewFile(uintptr(h), "CONOUT$")
-	os.Stdout, os.Stderr = f, f
+	if !stdoutOK {
+		os.Stdout = f
+	}
+	if !stderrOK {
+		os.Stderr = f
+	}
+}
+
+func validStdHandle(std uint32) bool {
+	h, err := windows.GetStdHandle(std)
+	if err != nil || h == 0 || h == windows.InvalidHandle {
+		return false
+	}
+	t, err := windows.GetFileType(h)
+	return err == nil && t != windows.FILE_TYPE_UNKNOWN
 }
