@@ -1,0 +1,20 @@
+# Packit builds bopen from source in Fedora COPR on every GitHub release.
+# Activation (maintainer, once): install the Packit GitHub app on this
+# repository and create the COPR project blackfyre/bopen (or let Packit
+# create it). See the README's "Releasing" section.
+specfile_path: packaging/fedora/bopen.spec
+upstream_package_name: bopen
+downstream_package_name: bopen
+upstream_tag_template: v{version}
+
+jobs:
+  - job: copr_build
+    trigger: release
+    owner: blackfyre
+    project: bopen
+    targets:
+      - fedora-all-x86_64
+      - fedora-all-aarch64
+    # Go modules are downloaded during the build.
+    enable_net: true
+    preserve_project: true

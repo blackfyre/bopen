@@ -91,6 +91,38 @@ nfpms:
           - libXcursor
           - libXfixes
 
+# winget manifests are generated on every release. They are submitted as a
+# pull request to microsoft/winget-pkgs (from the blackfyre/winget-pkgs fork)
+# only when the WINGET_GITHUB_TOKEN secret is set.
+winget:
+  - name: bopen
+    package_identifier: blackfyre.bopen
+    publisher: blackfyre
+    publisher_url: https://github.com/blackfyre
+    short_description: Link inspector that removes tracking and opens links in the browser you choose
+    description: >-
+      bopen registers as the default web browser. When a link is clicked it
+      shows the link with redirect wrappers and tracking parameters
+      highlighted, each with the reason it is suggested for removal, and
+      opens the result in the browser, profile or private window you choose.
+    license: MIT
+    license_url: https://github.com/blackfyre/bopen/blob/main/LICENSE
+    homepage: https://github.com/blackfyre/bopen
+    release_notes_url: https://github.com/blackfyre/bopen/releases/tag/{{ .Tag }}
+    tags: [browser, privacy, tracking, url, link]
+    skip_upload: '{{ if envOrDefault "WINGET_GITHUB_TOKEN" "" }}false{{ else }}true{{ end }}'
+    repository:
+      owner: blackfyre
+      name: winget-pkgs
+      branch: "bopen-{{ .Version }}"
+      token: '{{ envOrDefault "WINGET_GITHUB_TOKEN" "" }}'
+      pull_request:
+        enabled: true
+        base:
+          owner: microsoft
+          name: winget-pkgs
+          branch: master
+
 checksum:
   name_template: checksums.txt
   algorithm: sha256

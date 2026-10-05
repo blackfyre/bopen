@@ -1,6 +1,8 @@
 module github.com/blackfyre/bopen
 
-go 1.27.1
+go 1.26.0
+
+toolchain go1.27.1
 
 require (
 	gioui.org v0.10.3

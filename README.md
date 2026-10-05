@@ -71,7 +71,7 @@ on first start.
 ### From source with `go install`
 
 Handy for testing a branch or installing on a platform without a published
-binary. It needs Go 1.27.1 or newer (the version in `go.mod`) and, on Linux, the Gio development
+binary. It needs Go 1.26 or newer and, on Linux, the Gio development
 packages listed under [Building](#building):
 
 ```
@@ -320,6 +320,25 @@ git push origin v0.1.0
 
 The workflow runs the tests, then GoReleaser publishes the archives, `.deb`
 and `.rpm` packages and `checksums.txt` to the GitHub release.
+
+### Package repositories
+
+Both are prepared in the repository and activated once by the maintainer:
+
+- **Fedora COPR.** `packaging/fedora/bopen.spec` builds bopen from source,
+  and `.packit.yaml` asks [Packit](https://packit.dev) to build it in the
+  COPR project `blackfyre/bopen` for every GitHub release (Fedora x86_64 and
+  aarch64). To activate: sign in to [COPR](https://copr.fedorainfracloud.org)
+  with a Fedora account, and install the Packit GitHub app on this
+  repository. The next release then appears as
+  `sudo dnf copr enable blackfyre/bopen && sudo dnf install bopen`.
+- **winget.** Each release writes winget manifests (`blackfyre.bopen`) to
+  `dist/winget`. To publish automatically, fork
+  [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) to
+  `blackfyre/winget-pkgs`, create a token that can push to the fork and open
+  pull requests, and store it as the `WINGET_GITHUB_TOKEN` repository secret.
+  Without the secret, nothing is submitted. Microsoft reviews the first
+  submission of a new package by hand.
 
 ## Licence
 
