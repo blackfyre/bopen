@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"image"
 	"image/color"
 	"strings"
@@ -274,4 +275,18 @@ func (w *window) headerRow(title string, btn *widget.Clickable, icon *widget.Ico
 func withAlpha(c color.NRGBA, a uint8) color.NRGBA {
 	c.A = a
 	return c
+}
+
+// mono is primary text in the monospace font, for patterns and URLs.
+func (w *window) mono(s string) layout.Widget {
+	return func(gtx layout.Context) layout.Dimensions {
+		l := material.Body1(w.th, s)
+		l.Font.Typeface = "Go Mono"
+		l.Color = w.pal.Fg
+		return l.Layout(gtx)
+	}
+}
+
+func errorf(format string, args ...any) error {
+	return fmt.Errorf(format, args...)
 }

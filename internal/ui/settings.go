@@ -29,6 +29,8 @@ type settingsView struct {
 	list       widget.List
 	userRules  map[string]*userRuleRow
 	addRule    widget.Clickable
+	siteRules  map[string]*userRuleRow
+	addSite    widget.Clickable
 	windowMode widget.Enum
 	browsers   map[string]*browserRow
 	rules      []widget.Bool
@@ -152,6 +154,9 @@ func (w *window) handleSettings(gtx layout.Context) {
 		}
 	}
 	w.handleClearURLs(gtx)
+	if w.handleSiteRules(gtx) {
+		return
+	}
 	if s.addRule.Clicked(gtx) {
 		w.form.add()
 		return
@@ -225,7 +230,7 @@ func (w *window) layoutSettings(gtx layout.Context) layout.Dimensions {
 			)
 		})
 	}
-	sections = append(sections, w.card("Browsers", browserRows...))
+	sections = append(sections, w.card("Browsers", browserRows...), w.siteRulesCard())
 
 	var ruleRows []layout.Widget
 	if len(w.env.Config.Rules.User) == 0 {

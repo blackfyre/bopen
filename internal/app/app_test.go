@@ -23,11 +23,11 @@ func TestPreselect(t *testing.T) {
 		{prefs.State{LastUsed: "gone.desktop", PreviousDefault: "also-gone.desktop"}, 0},
 		{prefs.State{}, 0},
 	} {
-		if got := Preselect(browsers, tc.st); got != tc.want {
+		if got := Preselect(browsers, tc.st, ""); got != tc.want {
 			t.Errorf("%+v: got %d, want %d", tc.st, got, tc.want)
 		}
 	}
-	if got := Preselect(nil, prefs.State{LastUsed: "zen.desktop"}); got != -1 {
+	if got := Preselect(nil, prefs.State{LastUsed: "zen.desktop"}, ""); got != -1 {
 		t.Errorf("empty list: got %d", got)
 	}
 }
@@ -71,7 +71,7 @@ func TestOpenRecordsLastUsedOnSuccess(t *testing.T) {
 	if got := prefs.LoadState(dir); got.LastUsed != "zen.desktop" || got.PreviousDefault != "brave.desktop" {
 		t.Fatalf("state = %+v", got)
 	}
-	if got := Preselect(browsers, prefs.LoadState(dir)); got != 2 {
+	if got := Preselect(browsers, prefs.LoadState(dir), ""); got != 2 {
 		t.Fatalf("next invocation pre-selects %d", got)
 	}
 }
@@ -114,7 +114,7 @@ func TestPreselectSkipsHiddenLastUsed(t *testing.T) {
 	cfg := prefs.Config{Browsers: prefs.BrowsersConfig{Hidden: []string{"firefox.desktop"}}}
 	visible := Visible(all, cfg)
 	st := prefs.State{LastUsed: "firefox.desktop", PreviousDefault: "brave.desktop"}
-	if i := Preselect(visible, st); i != 0 || visible[i].ID != "brave.desktop" {
+	if i := Preselect(visible, st, ""); i != 0 || visible[i].ID != "brave.desktop" {
 		t.Fatalf("pre-selected %d", i)
 	}
 }
@@ -123,7 +123,7 @@ func TestAllHiddenNeedsWindow(t *testing.T) {
 	all := []discovery.Browser{{ID: "brave.desktop"}}
 	cfg := prefs.Config{Window: prefs.WindowWhenSuggestions, Browsers: prefs.BrowsersConfig{Hidden: []string{"brave.desktop"}}}
 	visible := Visible(all, cfg)
-	if len(visible) != 0 || Preselect(visible, prefs.State{}) != -1 {
+	if len(visible) != 0 || Preselect(visible, prefs.State{}, "") != -1 {
 		t.Fatalf("visible %v", visible)
 	}
 	if !NeedWindow(Situation{Config: cfg, Analysis: analysis(t, "https://example.com/"), Browsers: visible}) {
@@ -201,5 +201,58 @@ func TestDisabledBuiltinDoesNotBlockUserRule(t *testing.T) {
 	a := clean.Analyse("https://example.com/?utm_source=x", Rules(builtin, cfg, nil))
 	if len(a.Suggestions) != 1 || a.Suggestions[0].Source != clean.SourceUser || a.Suggestions[0].Default {
 		t.Fatalf("suggestions %+v", a.Suggestions)
+	}
+}
+
+func siteConfig(rules ...prefs.SiteRule) prefs.Config {
+	return prefs.Config{Sites: rules}
+}
+
+func TestMatchSite(t *testing.T) {
+	offered := []discovery.Browser{{ID: "chrome.desktop"}, {ID: "zen.desktop"}}
+	cfg := siteConfig(
+		prefs.SiteRule{ID: "s-1", Hosts: []string{"*.atlassian.net"}, Browser: "chrome.desktop"},
+		prefs.SiteRule{ID: "s-2", Hosts: []string{"acme.atlassian.net"}, Browser: "zen.desktop"},
+		prefs.SiteRule{ID: "s-3", Hosts: []string{"news.example.com"}, Browser: "gone.desktop"},
+		prefs.SiteRule{ID: "s-4", Hosts: []string{"*.example.com"}, Browser: "zen.desktop"},
+	)
+	for host, want := range map[string]string{
+		"acme.atlassian.net": "s-1", // first match wins
+		"ACME.Atlassian.NET": "s-1",
+		"news.example.com":   "s-4", // s-3's browser is not offered
+		"atlassian.net":      "",
+		"example.org":        "",
+	} {
+		r, ok := MatchSite(cfg, offered, host)
+		if (want == "" && ok) || (want != "" && r.ID != want) {
+			t.Errorf("%s: got %q %v, want %q", host, r.ID, ok, want)
+		}
+	}
+}
+
+func TestDestinationHostFollowsRedirect(t *testing.T) {
+	a := analysis(t, "https://www.google.com/url?q=https%3A%2F%2Facme.atlassian.net%2Fbrowse%2FX-1&sa=D")
+	if got := DestinationHost(a); got != "acme.atlassian.net" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestPreselectPrefersSiteRule(t *testing.T) {
+	if got := Preselect(browsers, prefs.State{LastUsed: "zen.desktop"}, "firefox.desktop"); got != 1 {
+		t.Fatalf("got %d", got)
+	}
+	if got := Preselect(browsers, prefs.State{LastUsed: "zen.desktop"}, "gone.desktop"); got != 2 {
+		t.Fatalf("missing preferred browser not skipped: %d", got)
+	}
+}
+
+func TestDirectSkipsWindowUnlessProblems(t *testing.T) {
+	always := prefs.Config{Window: prefs.WindowAlways}
+	tracked := analysis(t, "https://example.com/?fbclid=x")
+	if NeedWindow(Situation{Config: always, Analysis: tracked, Browsers: browsers, Direct: true}) {
+		t.Fatal("direct rule showed the window")
+	}
+	if !NeedWindow(Situation{Config: always, Analysis: tracked, Browsers: browsers, Direct: true, Problems: []error{errors.New("x")}}) {
+		t.Fatal("problems hidden by a direct rule")
 	}
 }

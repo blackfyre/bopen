@@ -292,3 +292,38 @@ func TestClearURLsDefaultsOff(t *testing.T) {
 		t.Fatal("clearurls = true not read")
 	}
 }
+
+func TestSiteRulesPersistAndValidate(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, "[[sites]]\nid = \"s-bad\"\nhosts = [\"x.example.com\"]\nbrowser = \"\"\n")
+	_, problems := LoadConfig(dir)
+	if len(problems) != 1 || !strings.Contains(problems[0].Error(), "s-bad") {
+		t.Fatalf("problems %v", problems)
+	}
+	var id string
+	if _, err := UpdateConfig(dir, func(c *Config) {
+		c.DeleteSiteRule("s-bad")
+		id = c.AddSiteRule(SiteRule{Hosts: []string{"*.atlassian.net"}, Browser: "google-chrome.desktop", Direct: true})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, problems := LoadConfig(dir)
+	r, ok := cfg.SiteRule(id)
+	if len(problems) != 0 || !ok || !strings.HasPrefix(id, "s-") || r.Hosts[0] != "*.atlassian.net" || !r.Direct || len(cfg.Sites) != 1 {
+		t.Fatalf("cfg %+v problems %v", cfg.Sites, problems)
+	}
+	if _, err := UpdateConfig(dir, func(c *Config) {
+		r.Direct = false
+		c.SetSiteRule(r)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, _ := LoadConfig(dir); cfg.Sites[0].Direct {
+		t.Fatal("edit not saved")
+	}
+	for _, bad := range []SiteRule{{Browser: "b"}, {Hosts: []string{"["}, Browser: "b"}, {Hosts: []string{" "}, Browser: "b"}} {
+		if bad.Validate() == nil {
+			t.Errorf("%+v accepted", bad)
+		}
+	}
+}

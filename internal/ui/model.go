@@ -90,6 +90,14 @@ type Model struct {
 	Env *Env
 	// Invalid is set when Input is not a usable web URL.
 	Invalid bool
+	// Host is the destination host with the default suggestions applied.
+	Host string
+	// Site is the site rule that chose the browser, if any.
+	Site *prefs.SiteRule
+	// Remember saves a site rule for Host with the browser used on open.
+	Remember bool
+	// RememberError reports a failed save of the remembered site rule.
+	RememberError error
 }
 
 type spanKey struct {
@@ -108,13 +116,6 @@ func (m *Model) Refresh() {
 	if m.Selected >= 0 && m.Selected < len(m.Browsers) {
 		selected = m.Browsers[m.Selected].ID
 	}
-	m.Browsers = app.Visible(m.Env.AllBrowsers, m.Env.Config)
-	m.Selected = app.Preselect(m.Browsers, m.Env.State)
-	for i, b := range m.Browsers {
-		if b.ID == selected {
-			m.Selected = i
-		}
-	}
 	if m.Analysis != nil {
 		old := map[spanKey]bool{}
 		for i, s := range m.Analysis.Suggestions {
@@ -126,6 +127,19 @@ func (m *Model) Refresh() {
 			if v, ok := old[spanKey{s.Start, s.End, s.Kind}]; ok {
 				m.Accepted[i] = v
 			}
+		}
+	}
+	m.Browsers = app.Visible(m.Env.AllBrowsers, m.Env.Config)
+	m.Host = app.DestinationHost(m.Analysis)
+	m.Site = nil
+	preferred := ""
+	if rule, ok := app.MatchSite(m.Env.Config, m.Browsers, m.Host); ok {
+		m.Site, preferred = &rule, rule.Browser
+	}
+	m.Selected = app.Preselect(m.Browsers, m.Env.State, preferred)
+	for i, b := range m.Browsers {
+		if b.ID == selected {
+			m.Selected = i
 		}
 	}
 	m.Blocker = ""
@@ -166,9 +180,15 @@ func (m *Model) OpenSelected() bool {
 	if !m.CanOpen() {
 		return false
 	}
-	if err := m.Open(m.Browsers[m.Selected], m.Result()); err != nil {
-		m.LaunchError = "Could not open " + m.Browsers[m.Selected].Name + ": " + err.Error()
+	b := m.Browsers[m.Selected]
+	if err := m.Open(b, m.Result()); err != nil {
+		m.LaunchError = "Could not open " + b.Name + ": " + err.Error()
 		return false
+	}
+	if m.Remember && m.Site == nil && m.Host != "" && m.Env != nil {
+		m.RememberError = m.Env.Update(func(c *prefs.Config) {
+			c.AddSiteRule(prefs.SiteRule{Hosts: []string{m.Host}, Browser: b.ID})
+		})
 	}
 	return true
 }

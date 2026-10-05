@@ -3,7 +3,10 @@
 package app
 
 import (
+	"path"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/blackfyre/bopen/internal/clean"
 	"github.com/blackfyre/bopen/internal/discovery"
@@ -106,12 +109,46 @@ func missing(previous, present []string) []string {
 	return out
 }
 
-// Preselect returns the index in browsers of the browser to pre-select: the
-// last-used browser, else the previous system default, else the first. It
-// returns -1 when browsers is empty. Pass the visible browsers, so hidden
-// candidates are skipped.
-func Preselect(browsers []discovery.Browser, st prefs.State) int {
-	for _, id := range []string{st.LastUsed, st.PreviousDefault} {
+// MatchSite returns the first valid site rule with a pattern matching host
+// (case-insensitively) whose browser is among the offered browsers.
+func MatchSite(cfg prefs.Config, offered []discovery.Browser, host string) (prefs.SiteRule, bool) {
+	host = strings.ToLower(host)
+	if host == "" {
+		return prefs.SiteRule{}, false
+	}
+	for _, r := range cfg.Sites {
+		if r.Validate() != nil || !slices.ContainsFunc(offered, func(b discovery.Browser) bool { return b.ID == r.Browser }) {
+			continue
+		}
+		for _, pattern := range r.Hosts {
+			if ok, _ := path.Match(strings.ToLower(strings.TrimSpace(pattern)), host); ok {
+				return r, true
+			}
+		}
+	}
+	return prefs.SiteRule{}, false
+}
+
+// DestinationHost returns the host of the URL that opens with the default
+// suggestions applied, so redirect wrappers count by their target.
+func DestinationHost(a *clean.Analysis) string {
+	if a == nil {
+		return ""
+	}
+	u, err := clean.ParseTolerant(a.Clean(a.Defaults()))
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Hostname())
+}
+
+// Preselect returns the index in browsers of the browser to pre-select:
+// preferred (a site rule's browser) when given, else the last-used browser,
+// else the previous system default, else the first. It returns -1 when
+// browsers is empty. Pass the visible browsers, so hidden candidates are
+// skipped.
+func Preselect(browsers []discovery.Browser, st prefs.State, preferred string) int {
+	for _, id := range []string{preferred, st.LastUsed, st.PreviousDefault} {
 		if id == "" {
 			continue
 		}
@@ -134,6 +171,8 @@ type Situation struct {
 	ValidationErr error
 	Analysis      *clean.Analysis
 	Browsers      []discovery.Browser
+	// Direct is set when a direct site rule applies.
+	Direct bool
 }
 
 // NeedWindow reports whether the inspector window must be shown. Errors and
@@ -142,6 +181,9 @@ type Situation struct {
 func NeedWindow(s Situation) bool {
 	if s.ValidationErr != nil || len(s.Problems) > 0 || len(s.Browsers) == 0 || s.Analysis == nil {
 		return true
+	}
+	if s.Direct {
+		return false
 	}
 	if s.Config.Window == prefs.WindowWhenSuggestions {
 		return len(s.Analysis.Suggestions) > 0

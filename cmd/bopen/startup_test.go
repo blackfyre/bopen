@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/blackfyre/bopen/internal/app"
 )
 
 // sandbox points every location bopen reads at a temporary home with a
@@ -72,5 +74,21 @@ func BenchmarkPrepare(b *testing.B) {
 	sandbox(b)
 	for b.Loop() {
 		prepare(startupURL)
+	}
+}
+
+func TestDirectSiteRuleSkipsWindow(t *testing.T) {
+	sandbox(t)
+	config, _ := os.UserConfigDir()
+	cfg := "[[sites]]\nid = \"s-1\"\nhosts = [\"*.atlassian.net\"]\nbrowser = \"two.desktop\"\ndirect = true\n"
+	if err := os.WriteFile(filepath.Join(config, "bopen", "config.toml"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, m := prepare("https://acme.atlassian.net/browse/X-1?utm_source=mail")
+	if !s.Direct || app.NeedWindow(s) {
+		t.Fatalf("direct %v need window %v problems %v", s.Direct, app.NeedWindow(s), s.Problems)
+	}
+	if m.Browsers[m.Selected].ID != "two.desktop" || m.Result() != "https://acme.atlassian.net/browse/X-1" {
+		t.Fatalf("selected %q result %q", m.Browsers[m.Selected].ID, m.Result())
 	}
 }

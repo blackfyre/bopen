@@ -153,6 +153,26 @@ kept, so a reinstalled browser keeps its settings. The file belongs to the
 settings screen: it can be edited by hand, but comments are not kept when the
 settings screen saves it.
 
+### Site rules
+
+To always open a site in a particular browser, tick **Always open <host> in
+this browser** in the inspector before opening the link, or add a rule under
+**Site rules** in the settings. A rule maps host patterns (such as
+`*.atlassian.net`) to a browser and pre-selects that browser for matching
+links, ahead of the last-used one. Rules match the link's destination, so a
+Google or Outlook redirect to Jira counts as Jira. With **Open directly**
+ticked, matching links skip the inspector and open straight away, with the
+usual tracking parameters still removed. Rules are tried in order and stored
+in `config.toml`:
+
+```toml
+[[sites]]
+id      = "s-1a2b3c"                 # assigned by bopen
+hosts   = ["*.atlassian.net"]
+browser = "google-chrome.desktop"    # desktop file ID, or registry name on Windows
+direct  = true
+```
+
 ### Your own rules
 
 Right-click any parameter in the inspector's link and choose

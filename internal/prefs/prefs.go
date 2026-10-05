@@ -34,6 +34,83 @@ type Config struct {
 	Window   Window         `toml:"window"`
 	Browsers BrowsersConfig `toml:"browsers"`
 	Rules    RulesConfig    `toml:"rules"`
+	// Sites are the site rules, in matching order.
+	Sites []SiteRule `toml:"sites,omitempty"`
+}
+
+// SiteRule sends links for matching hosts to a browser.
+type SiteRule struct {
+	ID string `toml:"id"`
+	// Hosts are host patterns; * matches any run of characters.
+	Hosts []string `toml:"hosts"`
+	// Browser is the identity of the browser to use.
+	Browser string `toml:"browser"`
+	// Direct opens matching links without the inspector.
+	Direct bool `toml:"direct,omitempty"`
+}
+
+// Validate reports why the site rule cannot be applied, or nil.
+func (r SiteRule) Validate() error {
+	if len(r.Hosts) == 0 {
+		return errors.New("at least one host pattern is required")
+	}
+	for _, h := range r.Hosts {
+		if strings.TrimSpace(h) == "" {
+			return errors.New("empty host pattern")
+		}
+		if _, err := path.Match(h, ""); err != nil {
+			return fmt.Errorf("invalid host pattern %q", h)
+		}
+	}
+	if strings.TrimSpace(r.Browser) == "" {
+		return errors.New("a browser is required")
+	}
+	return nil
+}
+
+// SiteRule returns the site rule with identifier id.
+func (c Config) SiteRule(id string) (SiteRule, bool) {
+	for _, r := range c.Sites {
+		if r.ID == id {
+			return r, true
+		}
+	}
+	return SiteRule{}, false
+}
+
+// AddSiteRule appends r with a new unique identifier and returns it.
+func (c *Config) AddSiteRule(r SiteRule) string {
+	for {
+		r.ID = "s-" + randomHex()
+		if _, taken := c.SiteRule(r.ID); !taken {
+			break
+		}
+	}
+	c.Sites = append(c.Sites, r)
+	return r.ID
+}
+
+// SetSiteRule replaces the site rule with r's identifier. It reports
+// whether the rule existed.
+func (c *Config) SetSiteRule(r SiteRule) bool {
+	for i := range c.Sites {
+		if c.Sites[i].ID == r.ID {
+			c.Sites[i] = r
+			return true
+		}
+	}
+	return false
+}
+
+// DeleteSiteRule removes the site rule with identifier id.
+func (c *Config) DeleteSiteRule(id string) {
+	c.Sites = slices.DeleteFunc(c.Sites, func(r SiteRule) bool { return r.ID == id })
+}
+
+func randomHex() string {
+	var b [3]byte
+	_, _ = rand.Read(b[:])
+	return hex.EncodeToString(b[:])
 }
 
 // BrowsersConfig controls which browsers the inspector offers and in which
@@ -106,9 +183,7 @@ func (c Config) UserRule(id string) (UserRule, bool) {
 // AddUserRule appends r with a new unique identifier and returns that identifier.
 func (c *Config) AddUserRule(r UserRule) string {
 	for {
-		var b [3]byte
-		_, _ = rand.Read(b[:])
-		r.ID = "u-" + hex.EncodeToString(b[:])
+		r.ID = "u-" + randomHex()
 		if _, taken := c.UserRule(r.ID); !taken {
 			break
 		}
@@ -215,7 +290,17 @@ func LoadConfig(dir string) (Config, []error) {
 	}
 	cfg.Browsers = raw.Browsers
 	cfg.Rules = raw.Rules
+	cfg.Sites = raw.Sites
 	var problems []error
+	for i, r := range raw.Sites {
+		if err := r.Validate(); err != nil {
+			name := r.ID
+			if name == "" {
+				name = fmt.Sprintf("#%d", i+1)
+			}
+			problems = append(problems, fmt.Errorf("%s: site rule %s (%s) is ignored: %w", path, name, strings.Join(r.Hosts, ", "), err))
+		}
+	}
 	for i, r := range raw.Rules.User {
 		if err := r.Validate(); err != nil {
 			name := r.ID

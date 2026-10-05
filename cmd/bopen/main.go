@@ -187,6 +187,7 @@ func prepare(input string) (app.Situation, *ui.Model) {
 		ValidationErr: verr,
 		Analysis:      m.Analysis,
 		Browsers:      m.Browsers,
+		Direct:        m.Site != nil && m.Site.Direct,
 	}
 	return s, m
 }

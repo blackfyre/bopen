@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"gioui.org/app"
@@ -71,9 +72,11 @@ type window struct {
 	open     widget.Clickable
 	cancel   widget.Clickable
 	cog      widget.Clickable
+	remember widget.Bool
 	result   widget.Selectable
 	settings settingsView
 	form     ruleForm
+	siteForm siteForm
 	// look is the host appearance; pal is derived from it.
 	look appearance.Settings
 	pal  Palette
@@ -160,6 +163,7 @@ func (w *window) syncInspector() {
 		w.toggles[i].Value = a
 	}
 	w.browsers.Value = strconv.Itoa(w.m.Selected)
+	w.remember.Value = w.m.Remember
 	if w.m.Analysis != nil {
 		w.menus.reset(len(w.m.Analysis.Suggestions))
 	}
@@ -220,6 +224,10 @@ func (w *window) handle(gtx layout.Context) {
 		}
 		return
 	}
+	if w.siteForm.open {
+		w.handleSiteForm(gtx)
+		return
+	}
 	if w.view == viewSettings {
 		w.handleSettings(gtx)
 		return
@@ -253,7 +261,7 @@ func (w *window) handle(gtx layout.Context) {
 		}
 		switch ke.Name {
 		case key.NameReturn, key.NameEnter:
-			w.done = w.m.OpenSelected() || w.done
+			w.done = w.openSelected() || w.done
 		case key.NameEscape:
 			w.done = true
 		case key.NameUpArrow:
@@ -272,13 +280,16 @@ func (w *window) handle(gtx layout.Context) {
 			w.m.Accepted[i] = w.toggles[i].Value
 		}
 	}
+	if w.remember.Update(gtx) {
+		w.m.Remember = w.remember.Value
+	}
 	if w.browsers.Update(gtx) {
 		if i, err := strconv.Atoi(w.browsers.Value); err == nil {
 			w.m.Selected = i
 		}
 	}
 	if w.open.Clicked(gtx) {
-		w.done = w.m.OpenSelected() || w.done
+		w.done = w.openSelected() || w.done
 	}
 	if w.cancel.Clicked(gtx) {
 		w.done = true
@@ -294,6 +305,9 @@ func (w *window) layout(gtx layout.Context) layout.Dimensions {
 	}
 	if w.form.open {
 		w.layoutForm(gtx)
+	}
+	if w.siteForm.open {
+		w.layoutSiteForm(gtx)
 	}
 	return dims
 }
@@ -324,6 +338,7 @@ func (w *window) layoutInspector(gtx layout.Context) layout.Dimensions {
 		for i := range w.m.Browsers {
 			rows = append(rows, w.browser(i))
 		}
+		rows = append(rows, w.siteRow)
 		sections = append(sections, w.card("Open in", rows...))
 	}
 	return w.page(gtx, &w.list, w.headerRow("bopen", &w.cog, iconSettings, "Settings"), sections, w.buttons)
@@ -428,6 +443,28 @@ func (w *window) browser(i int) layout.Widget {
 			layout.Rigid(w.chip(string(b.Kind), w.pal.Muted)),
 		)
 	}
+}
+
+// openSelected opens the link and reports a failure to remember the site,
+// which cannot be shown once the window closes.
+func (w *window) openSelected() bool {
+	ok := w.m.OpenSelected()
+	if ok && w.m.RememberError != nil {
+		fmt.Fprintln(os.Stderr, "bopen: could not save the site rule:", w.m.RememberError)
+	}
+	return ok
+}
+
+// siteRow names the site rule that chose the browser, or offers to
+// remember the choice for the destination host.
+func (w *window) siteRow(gtx layout.Context) layout.Dimensions {
+	switch {
+	case w.m.Site != nil:
+		return w.muted("Chosen by your site rule for " + strings.Join(w.m.Site.Hosts, ", ") + " (change it in the settings).")(gtx)
+	case w.m.Host != "":
+		return w.checkBox(&w.remember, "Always open "+w.m.Host+" in this browser", w.pal.Fg).Layout(gtx)
+	}
+	return layout.Dimensions{}
 }
 
 func (w *window) buttons(gtx layout.Context) layout.Dimensions {
