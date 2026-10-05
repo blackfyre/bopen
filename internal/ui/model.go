@@ -3,6 +3,7 @@ package ui
 
 import (
 	"github.com/blackfyre/bopen/internal/app"
+	"github.com/blackfyre/bopen/internal/appearance"
 	"github.com/blackfyre/bopen/internal/clean"
 	"github.com/blackfyre/bopen/internal/clearurls"
 	"github.com/blackfyre/bopen/internal/discovery"
@@ -30,6 +31,8 @@ type Env struct {
 	// ClearURLs is nil when the ClearURLs list is unavailable (no cache
 	// directory).
 	ClearURLs *ClearURLs
+	// Appearance is the host appearance at start-up.
+	Appearance appearance.Settings
 }
 
 // ClearURLs holds the ClearURLs list state.

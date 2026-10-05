@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/blackfyre/bopen/internal/app"
+	"github.com/blackfyre/bopen/internal/appearance"
 	"github.com/blackfyre/bopen/internal/clean"
 	"github.com/blackfyre/bopen/internal/clearurls"
 	"github.com/blackfyre/bopen/internal/discovery"
@@ -107,7 +108,7 @@ func runOpen(input string) {
 // loadEnv gathers preferences, state, browsers, rules and the registrar.
 // Problems with the configuration are returned rather than being fatal.
 func loadEnv() (*ui.Env, []error) {
-	env := &ui.Env{Config: prefs.DefaultConfig()}
+	env := &ui.Env{Config: prefs.DefaultConfig(), Appearance: appearance.Read()}
 	var problems []error
 	if dir, err := prefs.Dir(); err != nil {
 		problems = append(problems, err)

@@ -2,8 +2,6 @@ package ui
 
 import (
 	"errors"
-	"image"
-	"image/color"
 	"strings"
 
 	"gioui.org/io/event"
@@ -179,13 +177,13 @@ func (w *window) layoutForm(gtx layout.Context) layout.Dimensions {
 	// pointer input from reaching the widgets below.
 	area := clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops)
 	event.Op(gtx.Ops, &f.scrim)
-	paint.ColorOp{Color: color.NRGBA{A: 0x88}}.Add(gtx.Ops)
+	paint.ColorOp{Color: w.pal.Scrim}.Add(gtx.Ops)
 	paint.PaintOp{}.Add(gtx.Ops)
 	area.Pop()
 	return layout.Center.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 		gtx.Constraints.Max.X = min(gtx.Constraints.Max.X-gtx.Dp(32), gtx.Dp(560))
 		gtx.Constraints.Min.X = gtx.Constraints.Max.X
-		return w.card(gtx, func(gtx layout.Context) layout.Dimensions {
+		return backed(gtx, true, 12, layout.UniformInset(unit.Dp(20)), w.pal.Surface, w.pal.Border, func(gtx layout.Context) layout.Dimensions {
 			title := "Always flag this parameter"
 			switch {
 			case f.editID != "":
@@ -194,7 +192,9 @@ func (w *window) layoutForm(gtx layout.Context) layout.Dimensions {
 				title = "Add rule"
 			}
 			children := []layout.FlexChild{
-				layout.Rigid(w.heading(title)),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Bottom: unit.Dp(4)}.Layout(gtx, w.title(title))
+				}),
 				layout.Rigid(w.field("Parameter (a trailing * matches a prefix)", &f.param, "e.g. ref or ref_*")),
 			}
 			if f.hostsMode {
@@ -213,19 +213,17 @@ func (w *window) layoutForm(gtx layout.Context) layout.Dimensions {
 				layout.Rigid(w.field("Reason (required, shown next to the suggestion)", &f.reason, "Why should this be removed?")),
 			)
 			if f.err != "" {
-				children = append(children, layout.Rigid(w.banner(f.err, colError)))
+				children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Top: unit.Dp(8)}.Layout(gtx, w.banner(f.err, bannerError))
+				}))
 			}
 			children = append(children, layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return layout.Inset{Top: unit.Dp(12)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
 						layout.Flexed(1, w.muted("Enter saves · Esc cancels")),
-						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							b := material.Button(w.th, &f.cancel, "Cancel")
-							b.Background = colMuted
-							return b.Layout(gtx)
-						}),
+						layout.Rigid(w.secondaryButton(&f.cancel, "Cancel")),
 						layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
-						layout.Rigid(material.Button(w.th, &f.save, "Save").Layout),
+						layout.Rigid(w.primaryButton(&f.save, "Save")),
 					)
 				})
 			}))
@@ -234,22 +232,13 @@ func (w *window) layoutForm(gtx layout.Context) layout.Dimensions {
 	})
 }
 
-func (w *window) card(gtx layout.Context, content layout.Widget) layout.Dimensions {
-	return layout.Stack{}.Layout(gtx,
-		layout.Expanded(func(gtx layout.Context) layout.Dimensions {
-			rr := clip.UniformRRect(image.Rectangle{Max: gtx.Constraints.Min}, gtx.Dp(8))
-			paint.FillShape(gtx.Ops, w.th.Palette.Bg, rr.Op(gtx.Ops))
-			return layout.Dimensions{Size: gtx.Constraints.Min}
-		}),
-		layout.Stacked(func(gtx layout.Context) layout.Dimensions {
-			return layout.UniformInset(unit.Dp(16)).Layout(gtx, content)
-		}),
-	)
-}
-
 func (w *window) label(s string) layout.Widget {
 	return func(gtx layout.Context) layout.Dimensions {
-		return layout.Inset{Top: unit.Dp(8)}.Layout(gtx, material.Body2(w.th, s).Layout)
+		return layout.Inset{Top: unit.Dp(10)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+			l := material.Body2(w.th, s)
+			l.Color = w.pal.Fg
+			return l.Layout(gtx)
+		})
 	}
 }
 
@@ -260,9 +249,10 @@ func (w *window) field(label string, e *widget.Editor, hint string) layout.Widge
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				return layout.Inset{Top: unit.Dp(4)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
 					gtx.Constraints.Min.X = gtx.Constraints.Max.X
-					border := widget.Border{Color: colMuted, CornerRadius: unit.Dp(4), Width: unit.Dp(1)}
-					return border.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-						return layout.UniformInset(unit.Dp(8)).Layout(gtx, material.Editor(w.th, e, hint).Layout)
+					return border(gtx, w.pal.Border, 6, func(gtx layout.Context) layout.Dimensions {
+						ed := material.Editor(w.th, e, hint)
+						ed.Color, ed.HintColor, ed.SelectionColor = w.pal.Fg, w.pal.Muted, withAlpha(w.pal.Accent, 0x60)
+						return layout.UniformInset(unit.Dp(8)).Layout(gtx, ed.Layout)
 					})
 				})
 			}),

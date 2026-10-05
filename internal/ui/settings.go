@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"fmt"
+	"image/color"
 	"slices"
 	"strings"
 
@@ -187,47 +187,49 @@ func (w *window) handleSettings(gtx layout.Context) {
 
 func (w *window) layoutSettings(gtx layout.Context) layout.Dimensions {
 	s := &w.settings
-	var sections []layout.Widget
+	header := w.title("bopen settings")
 	if w.m != nil {
-		sections = append(sections, w.headerRow("Settings", &s.back, iconBack, "Back"))
-	} else {
-		sections = append(sections, w.heading("bopen settings"))
+		header = w.headerRow("Settings", &s.back, iconBack, "Back")
 	}
+	var sections []layout.Widget
 	if s.message != "" {
-		bg := colWarning
+		kind := bannerWarning
 		if s.isError {
-			bg = colError
+			kind = bannerError
 		}
-		sections = append(sections, w.banner(s.message, bg))
+		sections = append(sections, w.banner(s.message, kind))
 	}
 
-	sections = append(sections, w.heading("Inspector window"),
+	sections = append(sections, w.card("Inspector window",
 		w.radio(&s.windowMode, string(prefs.WindowAlways), "Always show it"),
 		w.radio(&s.windowMode, string(prefs.WindowWhenSuggestions),
-			"Only when there are suggestions (other links open directly in the last-used browser)"))
+			"Only when there are suggestions (other links open directly in the last-used browser)")))
 
-	sections = append(sections, w.heading("Browsers"))
+	var browserRows []layout.Widget
 	ordered := app.Ordered(w.env.AllBrowsers, w.env.Config)
 	if len(ordered) == 0 {
-		sections = append(sections, w.muted("No web browsers were found on this system."))
+		browserRows = append(browserRows, w.muted("No web browsers were found on this system."))
 	}
 	for i, b := range ordered {
 		row := s.browsers[b.ID]
-		label := fmt.Sprintf("%s  (%s)", b.Name, b.Kind)
 		first, last := i == 0, i == len(ordered)-1
-		sections = append(sections, func(gtx layout.Context) layout.Dimensions {
+		cb := w.checkBox(&row.show, b.Name, w.pal.Fg)
+		browserRows = append(browserRows, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
-				layout.Flexed(1, material.CheckBox(w.th, &row.show, label).Layout),
+				layout.Flexed(1, cb.Layout),
+				layout.Rigid(w.chip(string(b.Kind), w.pal.Muted)),
+				layout.Rigid(layout.Spacer{Width: unit.Dp(12)}.Layout),
 				layout.Rigid(w.smallButton(&row.up, "Up", first)),
 				layout.Rigid(layout.Spacer{Width: unit.Dp(4)}.Layout),
 				layout.Rigid(w.smallButton(&row.down, "Down", last)),
 			)
 		})
 	}
+	sections = append(sections, w.card("Browsers", browserRows...))
 
-	sections = append(sections, w.heading("Your rules"))
+	var ruleRows []layout.Widget
 	if len(w.env.Config.Rules.User) == 0 {
-		sections = append(sections, w.muted("None yet. Add one here, or right-click a parameter in the inspector."))
+		ruleRows = append(ruleRows, w.muted("None yet. Add one here, or right-click a parameter in the inspector."))
 	}
 	for _, r := range w.env.Config.Rules.User {
 		row := s.userRule(r.ID)
@@ -235,20 +237,26 @@ func (w *window) layoutSettings(gtx layout.Context) layout.Dimensions {
 		if len(r.Hosts) > 0 {
 			pattern += "  on " + strings.Join(r.Hosts, ", ")
 		}
-		details := r.Kind + " · " + r.Reason
+		details := r.Reason
 		if err := r.Validate(); err != nil {
 			details += " (ignored: " + err.Error() + ")"
 		}
-		colour := kindColour(clean.Kind(r.Kind))
-		sections = append(sections, func(gtx layout.Context) layout.Dimensions {
+		kind := clean.Kind(r.Kind)
+		ruleRows = append(ruleRows, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
 				layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
 					return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 						layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-							l := material.Body1(w.th, pattern)
-							l.Font.Typeface = "Go Mono"
-							l.Color = colour
-							return l.Layout(gtx)
+							return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+									l := material.Body1(w.th, pattern)
+									l.Font.Typeface = "Go Mono"
+									l.Color = w.pal.kind(kind)
+									return l.Layout(gtx)
+								}),
+								layout.Rigid(layout.Spacer{Width: unit.Dp(8)}.Layout),
+								layout.Rigid(w.chip(kindLabel(kind), w.pal.kind(kind))),
+							)
 						}),
 						layout.Rigid(w.muted(details)),
 					)
@@ -259,74 +267,62 @@ func (w *window) layoutSettings(gtx layout.Context) layout.Dimensions {
 			)
 		})
 	}
-	sections = append(sections, func(gtx layout.Context) layout.Dimensions {
-		return layout.W.Layout(gtx, material.Button(w.th, &s.addRule, "Add rule").Layout)
+	ruleRows = append(ruleRows, func(gtx layout.Context) layout.Dimensions {
+		return layout.W.Layout(gtx, w.secondaryButton(&s.addRule, "Add rule"))
 	})
+	sections = append(sections, w.card("Your rules", ruleRows...))
 
-	sections = append(sections, w.heading("Built-in rules"))
+	var builtinRows []layout.Widget
 	for i, r := range w.env.Builtin {
-		cb := material.CheckBox(w.th, &s.rules[i], rulePattern(r))
-		cb.Color = kindColour(r.Kind)
+		cb := w.checkBox(&s.rules[i], rulePattern(r), w.pal.kind(r.Kind))
 		cb.Font.Typeface = "Go Mono"
-		details := kindLabel(r.Kind) + " · " + r.Reason
-		sections = append(sections, func(gtx layout.Context) layout.Dimensions {
+		details := r.Reason
+		kind := r.Kind
+		builtinRows = append(builtinRows, func(gtx layout.Context) layout.Dimensions {
 			return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-				layout.Rigid(cb.Layout),
 				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-					return layout.Inset{Left: unit.Dp(32)}.Layout(gtx, w.muted(details))
+					return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
+						layout.Flexed(1, cb.Layout),
+						layout.Rigid(w.chip(kindLabel(kind), w.pal.kind(kind))),
+					)
+				}),
+				layout.Rigid(func(gtx layout.Context) layout.Dimensions {
+					return layout.Inset{Left: unit.Dp(36)}.Layout(gtx, w.muted(details))
 				}),
 			)
 		})
 	}
+	sections = append(sections, w.card("Built-in rules", builtinRows...))
 
-	sections = append(sections, w.clearURLsSection()...)
+	sections = append(sections, w.clearURLsCard())
 
-	sections = append(sections, w.heading("Default browser"), w.muted(s.status))
+	defaultRows := []layout.Widget{w.muted(s.status)}
 	if w.env.Registrar != nil {
-		sections = append(sections, func(gtx layout.Context) layout.Dimensions {
-			return layout.Inset{Top: unit.Dp(4)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.W.Layout(gtx, material.Button(w.th, &s.reregister, "Register bopen again").Layout)
-			})
+		defaultRows = append(defaultRows, func(gtx layout.Context) layout.Dimensions {
+			return layout.W.Layout(gtx, w.secondaryButton(&s.reregister, "Register bopen again"))
 		})
 	}
+	sections = append(sections, w.card("Default browser", defaultRows...))
 
-	return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
-		layout.Flexed(1, func(gtx layout.Context) layout.Dimensions {
-			return material.List(w.th, &s.list).Layout(gtx, len(sections), func(gtx layout.Context, i int) layout.Dimensions {
-				return layout.Inset{Left: unit.Dp(16), Right: unit.Dp(16), Top: unit.Dp(4), Bottom: unit.Dp(4)}.Layout(gtx, sections[i])
-			})
-		}),
-		layout.Rigid(func(gtx layout.Context) layout.Dimensions {
-			return layout.UniformInset(unit.Dp(16)).Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				hint := "Changes are saved immediately · Esc goes back"
-				label := "Back"
-				if w.m == nil {
-					hint, label = "Changes are saved immediately · Esc closes", "Close"
-				}
-				return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
-					layout.Flexed(1, w.muted(hint)),
-					layout.Rigid(material.Button(w.th, &s.close, label).Layout),
-				)
-			})
-		}),
-	)
+	hint, label := "Changes are saved immediately · Esc goes back", "Back"
+	if w.m == nil {
+		hint, label = "Changes are saved immediately · Esc closes", "Close"
+	}
+	return w.page(gtx, &s.list, header, sections, w.actionBar(hint, w.primaryButton(&s.close, label)))
 }
 
 func (w *window) radio(e *widget.Enum, key, label string) layout.Widget {
-	return material.RadioButton(w.th, e, key, label).Layout
+	return func(gtx layout.Context) layout.Dimensions {
+		rb := material.RadioButton(w.th, e, key, label)
+		rb.IconColor, rb.Color = w.pal.Accent, w.pal.Fg
+		return rb.Layout(gtx)
+	}
 }
 
-func (w *window) smallButton(btn *widget.Clickable, label string, disabled bool) layout.Widget {
-	return func(gtx layout.Context) layout.Dimensions {
-		if disabled {
-			gtx = gtx.Disabled()
-		}
-		b := material.Button(w.th, btn, label)
-		b.TextSize = unit.Sp(12)
-		b.Inset = layout.Inset{Top: unit.Dp(4), Bottom: unit.Dp(4), Left: unit.Dp(8), Right: unit.Dp(8)}
-		b.Background = colMuted
-		return b.Layout(gtx)
-	}
+func (w *window) checkBox(b *widget.Bool, label string, fg color.NRGBA) material.CheckBoxStyle {
+	cb := material.CheckBox(w.th, b, label)
+	cb.IconColor, cb.Color = w.pal.Accent, fg
+	return cb
 }
 
 func (s *settingsView) userRule(id string) *userRuleRow {

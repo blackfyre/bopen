@@ -99,6 +99,12 @@ bopen unregister  undo 'bopen register'
 bopen settings    change bopen's preferences
 ```
 
+bopen follows your desktop's appearance: light or dark mode, the accent
+colour and the high-contrast setting, read from the XDG desktop portal on
+Linux (COSMIC, GNOME, KDE and others) and from the personalisation settings
+on Windows. Changes apply while the window is open. Every text colour keeps a
+contrast ratio of at least 4.5:1 in every mode and with any accent colour.
+
 Keyboard: `Enter` opens, `Esc` cancels, `Up`/`Down` or `1`–`9` choose the
 browser.
 

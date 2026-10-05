@@ -26,11 +26,23 @@ func TestRightClickTargetsHoveredParameter(t *testing.T) {
 	w, _ := ruleWindow(t, "https://news.example.com/article?ref=home&utm_source=x")
 	router := new(input.Router)
 	scaledFrame(w, router)
-	// "https://news.example.com/article?" is 33 monospace characters of
-	// about 13.5 px at this scale, after the 24 px inset.
-	pos := f32.Pt(24+36*13.5, 80)
+	ref := paramIndex(t, w.m.Analysis, "ref")
+	// Find a point over "ref=home" by moving the pointer down the window
+	// until the hovered parameter is ref.
+	var pos f32.Point
+	found := false
+	for y := float32(0); y < 400 && !found; y += 4 {
+		for x := float32(16); x < 1100 && !found; x += 12 {
+			pos = f32.Pt(x, y)
+			router.Queue(pointer.Event{Kind: pointer.Move, Position: pos, Source: pointer.Mouse})
+			scaledFrame(w, router)
+			found = w.menus.hoverParam == ref
+		}
+	}
+	if !found {
+		t.Fatal("never hovered the ref parameter")
+	}
 	for _, e := range []pointer.Event{
-		{Kind: pointer.Move, Position: pos, Source: pointer.Mouse},
 		{Kind: pointer.Press, Position: pos, Buttons: pointer.ButtonSecondary, Source: pointer.Mouse},
 		{Kind: pointer.Release, Position: pos, Source: pointer.Mouse},
 	} {

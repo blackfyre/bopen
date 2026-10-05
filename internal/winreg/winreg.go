@@ -24,6 +24,7 @@ var ErrNotExist = errors.New("registry key or value does not exist")
 type Registry interface {
 	SubKeys(hive Hive, path string) ([]string, error)
 	String(hive Hive, path, name string) (string, error)
+	Integer(hive Hive, path, name string) (uint64, error)
 	SetString(hive Hive, path, name, value string) error
 	DeleteValue(hive Hive, path, name string) error
 	DeleteTree(hive Hive, path string) error
@@ -32,6 +33,7 @@ type Registry interface {
 // Fake is an in-memory Registry with case-insensitive key and value names.
 type Fake struct {
 	keys map[Hive]map[string]map[string]string
+	ints map[Hive]map[string]uint64
 	// names keeps the original spelling of each key's last path element.
 	names map[Hive]map[string]string
 }
@@ -133,6 +135,25 @@ func (f *Fake) DeleteTree(h Hive, path string) error {
 		return ErrNotExist
 	}
 	return nil
+}
+
+// SetInteger stores a DWORD/QWORD value, creating the key.
+func (f *Fake) SetInteger(h Hive, path, name string, value uint64) {
+	if f.ints == nil {
+		f.ints = map[Hive]map[string]uint64{}
+	}
+	if f.ints[h] == nil {
+		f.ints[h] = map[string]uint64{}
+	}
+	f.ints[h][norm(path)+`\`+strings.ToLower(name)] = value
+}
+
+func (f *Fake) Integer(h Hive, path, name string) (uint64, error) {
+	v, ok := f.ints[h][norm(path)+`\`+strings.ToLower(name)]
+	if !ok {
+		return 0, ErrNotExist
+	}
+	return v, nil
 }
 
 // Exists reports whether the key exists.

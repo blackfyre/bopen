@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"gioui.org/layout"
-	"gioui.org/unit"
 	"gioui.org/widget"
 	"gioui.org/widget/material"
 
@@ -125,39 +124,33 @@ func (w *window) clearURLsStatus() []string {
 	return lines
 }
 
-func (w *window) clearURLsSection() []layout.Widget {
+func (w *window) clearURLsCard() layout.Widget {
 	s, cu := &w.settings, w.env.ClearURLs
 	if cu == nil {
-		return []layout.Widget{w.heading("ClearURLs list"), w.muted("Unavailable: no cache directory.")}
+		return w.card("ClearURLs list", w.muted("Unavailable: no cache directory."))
 	}
-	sections := []layout.Widget{
-		w.heading("ClearURLs list"),
-		material.CheckBox(w.th, &s.clearURLs.enabled,
-			"Also use the ClearURLs list (downloads rule data from the ClearURLs project; updated daily)").Layout,
+	rows := []layout.Widget{
+		w.checkBox(&s.clearURLs.enabled,
+			"Also use the ClearURLs list (downloads rule data from the ClearURLs project; updated daily)", w.pal.Fg).Layout,
 	}
 	if w.env.Config.Rules.ClearURLs {
 		for _, line := range w.clearURLsStatus() {
-			sections = append(sections, w.muted(line))
+			rows = append(rows, w.muted(line))
 		}
-		sections = append(sections, func(gtx layout.Context) layout.Dimensions {
-			if w.fetching {
-				gtx = gtx.Disabled()
-			}
-			return layout.Inset{Top: unit.Dp(4)}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-				return layout.W.Layout(gtx, w.smallButton(&s.clearURLs.update, "Update now", false))
-			})
+		rows = append(rows, func(gtx layout.Context) layout.Dimensions {
+			return layout.W.Layout(gtx, w.smallButton(&s.clearURLs.update, "Update now", w.fetching))
 		})
 	}
-	sections = append(sections, func(gtx layout.Context) layout.Dimensions {
+	rows = append(rows, func(gtx layout.Context) layout.Dimensions {
 		return layout.Flex{Axis: layout.Vertical}.Layout(gtx,
 			layout.Rigid(w.muted("Rule data by the ClearURLs project, licensed under the LGPL-3.0. Suggestions from it are labelled “ClearURLs list”.")),
 			layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 				l := material.Body2(w.th, clearURLsProject)
-				l.Color = colRedirect
+				l.Color = w.pal.Redirect
 				l.State = &s.clearURLs.project
 				return l.Layout(gtx)
 			}),
 		)
 	})
-	return sections
+	return w.card("ClearURLs list", rows...)
 }

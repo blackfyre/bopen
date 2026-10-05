@@ -51,6 +51,16 @@ func (System) String(h Hive, path, name string) (string, error) {
 	return v, nil
 }
 
+func (System) Integer(h Hive, path, name string) (uint64, error) {
+	k, err := registry.OpenKey(root(h), path, registry.QUERY_VALUE)
+	if err != nil {
+		return 0, mapErr(err)
+	}
+	defer k.Close()
+	v, _, err := k.GetIntegerValue(name)
+	return v, mapErr(err)
+}
+
 func (System) SetString(h Hive, path, name, value string) error {
 	k, _, err := registry.CreateKey(root(h), path, registry.SET_VALUE)
 	if err != nil {
