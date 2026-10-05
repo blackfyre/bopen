@@ -1,0 +1,19 @@
+[Desktop Entry]
+Version=1.0
+Name=Firefox Web Browser
+Name[en_GB]=Firefox Web Browser (GB)
+Name[de]=Firefox-Webbrowser
+Comment=Browse the World Wide Web
+Exec=env BAMF_DESKTOP_FILE_HINT=/var/lib/snapd/desktop/applications/firefox_firefox.desktop /snap/bin/firefox %u
+Terminal=false
+X-MultipleArgs=false
+Type=Application
+Icon=/snap/firefox/current/default256.png
+Categories=GNOME;GTK;Network;WebBrowser;
+MimeType=text/html;text/xml;application/xhtml+xml;application/xml;application/rss+xml;application/rdf+xml;image/gif;image/jpeg;image/png;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/ftp;x-scheme-handler/chrome;video/webm;application/x-xpinstall;
+StartupNotify=true
+Actions=new-window;new-private-window;
+
+[Desktop Action new-window]
+Name=Open a New Window
+Exec=env BAMF_DESKTOP_FILE_HINT=/var/lib/snapd/desktop/applications/firefox_firefox.desktop /snap/bin/firefox -new-window

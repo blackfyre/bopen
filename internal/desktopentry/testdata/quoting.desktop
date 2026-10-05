@@ -1,0 +1,7 @@
+# Synthetic entry exercising Exec quoting, escapes and field codes.
+[Desktop Entry]
+Type=Application
+Name=Quoting\sTest
+Icon=quoting-icon
+Exec="/opt/My Browser/browser" --name=%c "--literal=%u" --profile "a \\"b\\" \\\\c \\$HOME" %i %f %% --url=%u
+MimeType=x-scheme-handler/http\;weird;x-scheme-handler/https;

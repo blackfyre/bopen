@@ -1,0 +1,96 @@
+package ui
+
+import (
+	"errors"
+	"net/url"
+	"strings"
+	"testing"
+
+	"github.com/blackfyre/bopen/internal/clean"
+	"github.com/blackfyre/bopen/internal/discovery"
+)
+
+func model(t *testing.T, raw string) *Model {
+	rules, err := clean.Builtin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := clean.Analyse(raw, rules)
+	return &Model{Input: raw, Analysis: a, Accepted: a.Defaults(),
+		Browsers: []discovery.Browser{{ID: "a", Name: "A"}, {ID: "b", Name: "B"}}}
+}
+
+func TestRunsCoverURLAndMarkKinds(t *testing.T) {
+	raw := "https://www.google.com/url?q=" + url.QueryEscape("https://shop.example.com/?fbclid=x&id=1")
+	m := model(t, raw)
+	var b strings.Builder
+	tracking := ""
+	for _, r := range m.runs() {
+		b.WriteString(r.text)
+		if r.kind == clean.KindTracking {
+			tracking += r.text
+		}
+	}
+	if b.String() != raw {
+		t.Fatalf("runs do not reproduce the URL: %q", b.String())
+	}
+	if tracking != "fbclid%3Dx" {
+		t.Fatalf("tracking runs = %q", tracking)
+	}
+}
+
+func TestRunsReflectRejection(t *testing.T) {
+	m := model(t, "https://example.com/?utm_source=x")
+	m.Accepted[0] = false
+	for _, r := range m.runs() {
+		if r.kind == clean.KindTracking && r.accepted {
+			t.Fatal("rejected suggestion drawn as accepted")
+		}
+	}
+}
+
+func TestResultUpdatesWithToggles(t *testing.T) {
+	m := model(t, "https://example.com/?a=1&utm_source=x")
+	if got := m.Result(); got != "https://example.com/?a=1" {
+		t.Fatalf("result %q", got)
+	}
+	m.Accepted[0] = false
+	if got := m.Result(); got != "https://example.com/?a=1&utm_source=x" {
+		t.Fatalf("result %q", got)
+	}
+}
+
+func TestMoveClamps(t *testing.T) {
+	m := model(t, "https://example.com/")
+	m.Move(-1)
+	if m.Selected != 0 {
+		t.Fatal(m.Selected)
+	}
+	m.Move(5)
+	if m.Selected != 1 {
+		t.Fatal(m.Selected)
+	}
+}
+
+func TestOpenSelectedFailureKeepsWindow(t *testing.T) {
+	m := model(t, "https://example.com/?fbclid=x")
+	var opened string
+	m.Open = func(b discovery.Browser, u string) error { opened = b.ID + " " + u; return nil }
+	m.Selected = 1
+	if !m.OpenSelected() || opened != "b https://example.com/" {
+		t.Fatalf("opened %q", opened)
+	}
+	m.Open = func(discovery.Browser, string) error { return errors.New("boom") }
+	if m.OpenSelected() || !strings.Contains(m.LaunchError, "boom") {
+		t.Fatalf("launch error %q", m.LaunchError)
+	}
+}
+
+func TestBlockerPreventsOpen(t *testing.T) {
+	m := model(t, "https://example.com/")
+	m.Blocker = "no browsers"
+	m.Open = func(discovery.Browser, string) error { t.Fatal("opened"); return nil }
+	if m.OpenSelected() {
+		t.Fatal("opened despite blocker")
+	}
+}
