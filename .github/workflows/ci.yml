@@ -48,10 +48,41 @@ jobs:
           args: check
 
       - name: shellcheck
-        run: shellcheck install.sh scripts/test-install.sh
+        run: shellcheck install.sh scripts/test-install.sh scripts/setup-arm64-cross.sh
 
       - name: install.sh tests
         run: scripts/test-install.sh
+
+  snapshot:
+    # Builds every release asset (including the arm64 cross-compile) without
+    # publishing, so a broken release build is caught before tagging.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install Gio build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev \
+            libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev
+
+      - name: Set up arm64 cross-compilation
+        run: scripts/setup-arm64-cross.sh
+
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: release --snapshot --clean
+
+      - name: Check the arm64 binary
+        run: file dist/linux_linux_arm64*/bopen | grep -q 'ARM aarch64'
 
   windows:
     runs-on: windows-latest

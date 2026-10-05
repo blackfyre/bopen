@@ -13,8 +13,6 @@
 
 set -eu
 
-ASSET=bopen_linux_amd64.tar.gz
-
 say() {
 	printf '%s\n' "$*"
 }
@@ -44,7 +42,8 @@ main() {
 	[ "$os" = Linux ] || fail "this script installs the Linux build; $os is not supported (see the README for Windows)"
 	arch=$(uname -m)
 	case $arch in
-	x86_64 | amd64) ;;
+	x86_64 | amd64) ASSET=bopen_linux_amd64.tar.gz ;;
+	aarch64 | arm64) ASSET=bopen_linux_arm64.tar.gz ;;
 	*) fail "no binary is published for $arch yet; build from source instead (see the README)" ;;
 	esac
 

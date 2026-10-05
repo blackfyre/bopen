@@ -48,16 +48,17 @@ libraries:
 ```
 # Debian/Ubuntu
 curl -fsSLO https://github.com/blackfyre/bopen/releases/latest/download/bopen_linux_amd64.deb
-sudo apt install ./bopen_linux_amd64.deb
+sudo apt install ./bopen_linux_amd64.deb      # bopen_linux_arm64.deb on arm64
 
 # Fedora/openSUSE
 sudo dnf install https://github.com/blackfyre/bopen/releases/latest/download/bopen_linux_amd64.rpm
 ```
 
-The Linux binary is built for x86-64 and needs glibc 2.35 or newer (Ubuntu
-22.04, Debian 12, Fedora 36 and later) and the usual Wayland, X11, EGL and
-xkbcommon libraries that every desktop already has. No `aarch64` binary is
-published yet; build from source instead.
+Linux binaries are built for x86-64 and arm64 (aarch64) and need glibc 2.35
+or newer (Ubuntu 22.04, Debian 12, Fedora 36 and later) and the usual
+Wayland, X11, EGL and xkbcommon libraries that every desktop already has. The
+install script picks the right one; packages are named
+`bopen_linux_<amd64|arm64>.<deb|rpm>`.
 
 ### Windows
 

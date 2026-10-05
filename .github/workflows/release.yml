@@ -27,6 +27,9 @@ jobs:
             libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev \
             libgles2-mesa-dev libegl1-mesa-dev libffi-dev libxcursor-dev libvulkan-dev
 
+      - name: Set up arm64 cross-compilation
+        run: scripts/setup-arm64-cross.sh
+
       - name: go test
         run: go test ./...
 

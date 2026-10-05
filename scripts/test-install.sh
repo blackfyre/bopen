@@ -21,19 +21,22 @@ fail() {
 	failures=$((failures + 1))
 }
 
-# make_release DIR VERSION: a fake bopen binary in a release layout.
+# make_release DIR VERSION: fake bopen binaries for amd64 and arm64 in a
+# release layout; each reports its version and architecture.
 make_release() {
-	mkdir -p "$1/pkg"
-	cat >"$1/pkg/bopen" <<SCRIPT
+	for arch in amd64 arm64; do
+		mkdir -p "$1/pkg"
+		cat >"$1/pkg/bopen" <<SCRIPT
 #!/bin/sh
 if [ "\${1:-}" = register ]; then touch "$work/registered"; fi
-echo "bopen $2" >&2
+echo "bopen $2 $arch" >&2
 exit 2
 SCRIPT
-	chmod +x "$1/pkg/bopen"
-	tar -czf "$1/bopen_linux_amd64.tar.gz" -C "$1/pkg" bopen
-	rm -r "$1/pkg"
-	(cd "$1" && sha256sum bopen_linux_amd64.tar.gz >checksums.txt)
+		chmod +x "$1/pkg/bopen"
+		tar -czf "$1/bopen_linux_$arch.tar.gz" -C "$1/pkg" bopen
+		rm -r "$1/pkg"
+	done
+	(cd "$1" && sha256sum bopen_linux_amd64.tar.gz bopen_linux_arm64.tar.gz >checksums.txt)
 }
 
 srv=$work/srv
@@ -64,7 +67,7 @@ run() {
 
 dir=$work/fresh/bin
 run fresh BOPEN_INSTALL_DIR="$dir" PATH="$dir:$PATH"
-if [ "$status" -eq 0 ] && [ -x "$dir/bopen" ] && grep -q "Installed bopen 0.2.0" "$out" &&
+if [ "$status" -eq 0 ] && [ -x "$dir/bopen" ] && grep -q "Installed bopen 0.2.0 amd64" "$out" &&
 	grep -q "  bopen register" "$out" && ! grep -q "not on your PATH" "$out"; then
 	pass "fresh install of latest"
 else
@@ -73,7 +76,7 @@ fi
 
 dir=$work/pinned/bin
 run pinned BOPEN_INSTALL_DIR="$dir" BOPEN_VERSION=v0.1.0
-if [ "$status" -eq 0 ] && grep -q "Installed bopen 0.1.0" "$out"; then
+if [ "$status" -eq 0 ] && grep -q "Installed bopen 0.1.0 amd64" "$out"; then
 	pass "pinned version"
 else
 	fail "pinned version (status $status): $(cat "$out")"
@@ -102,16 +105,30 @@ fi
 
 stubs=$work/stubs
 mkdir -p "$stubs"
-cat >"$stubs/uname" <<'SCRIPT'
+# fake_arch ARCH: a uname stub reporting Linux on ARCH.
+fake_arch() {
+	cat >"$stubs/uname" <<SCRIPT
 #!/bin/sh
-case $1 in -s) echo Linux ;; -m) echo aarch64 ;; esac
+case \$1 in -s) echo Linux ;; -m) echo $1 ;; esac
 SCRIPT
-chmod +x "$stubs/uname"
-: >"$work/server.log"
+	chmod +x "$stubs/uname"
+}
+
+fake_arch aarch64
 dir=$work/arm/bin
 run arm BOPEN_INSTALL_DIR="$dir" PATH="$stubs:$PATH"
-if [ "$status" -ne 0 ] && grep -q "no binary is published for aarch64" "$out" &&
-	! grep -q "bopen_linux_amd64" "$work/server.log" && [ ! -e "$dir" ]; then
+if [ "$status" -eq 0 ] && grep -q "Installed bopen 0.2.0 arm64" "$out"; then
+	pass "arm64 install"
+else
+	fail "arm64 install (status $status): $(cat "$out")"
+fi
+
+fake_arch riscv64
+: >"$work/server.log"
+dir=$work/riscv/bin
+run riscv BOPEN_INSTALL_DIR="$dir" PATH="$stubs:$PATH"
+if [ "$status" -ne 0 ] && grep -q "no binary is published for riscv64" "$out" &&
+	! grep -q "bopen_linux_" "$work/server.log" && [ ! -e "$dir" ]; then
 	pass "unsupported architecture"
 else
 	fail "unsupported architecture (status $status): $(cat "$out")"
