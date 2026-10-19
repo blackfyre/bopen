@@ -261,7 +261,7 @@ func (w *window) layoutSettings(gtx layout.Context) layout.Dimensions {
 							return layout.Flex{Alignment: layout.Middle}.Layout(gtx,
 								layout.Rigid(func(gtx layout.Context) layout.Dimensions {
 									l := material.Body1(w.th, pattern)
-									l.Font.Typeface = "Go Mono"
+									l.Font = monoFont
 									l.Color = w.pal.kind(kind)
 									return l.Layout(gtx)
 								}),
@@ -286,7 +286,7 @@ func (w *window) layoutSettings(gtx layout.Context) layout.Dimensions {
 	var builtinRows []layout.Widget
 	for i, r := range w.env.Builtin {
 		cb := w.checkBox(&s.rules[i], rulePattern(r), w.pal.kind(r.Kind))
-		cb.Font.Typeface = "Go Mono"
+		cb.Font = monoFont
 		details := r.Reason
 		kind := r.Kind
 		builtinRows = append(builtinRows, func(gtx layout.Context) layout.Dimensions {

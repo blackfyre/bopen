@@ -17,7 +17,45 @@ import (
 
 	"github.com/blackfyre/bopen/internal/appearance"
 	"github.com/blackfyre/bopen/internal/clean"
+	"github.com/blackfyre/bopen/internal/ui/fonts"
 )
+
+// Label sizes and letter-spacing for the uppercase JetBrains Mono labels
+// of the Blackfyre look (the site uses .06–.08em).
+const (
+	sizeLabel  unit.Sp = 11
+	trackingEm         = 0.08
+)
+
+var (
+	monoFont = font.Font{Typeface: fonts.Mono}
+	textFont = font.Font{Typeface: fonts.Text, Weight: font.SemiBold}
+)
+
+// tracked lays out an uppercase JetBrains Mono label with wide
+// letter-spacing, one glyph at a time (Gio's text layout has no tracking).
+func tracked(th *material.Theme, size unit.Sp, c color.NRGBA, s string) layout.Widget {
+	s = strings.ToUpper(s)
+	return func(gtx layout.Context) layout.Dimensions {
+		gap := int(float32(gtx.Sp(size)) * trackingEm)
+		x, h, base := 0, 0, 0
+		gtx.Constraints.Min = image.Point{}
+		for i, r := range s {
+			if i > 0 {
+				x += gap
+			}
+			trans := op.Offset(image.Pt(x, 0)).Push(gtx.Ops)
+			l := material.Label(th, size, string(r))
+			l.Font, l.Color, l.MaxLines = monoFont, c, 1
+			d := l.Layout(gtx)
+			trans.Pop()
+			x += d.Size.X
+			h = max(h, d.Size.Y)
+			base = max(base, d.Baseline)
+		}
+		return layout.Dimensions{Size: image.Pt(x, h), Baseline: base}
+	}
+}
 
 // setAppearance re-themes the window for the host appearance.
 func (w *window) setAppearance(s appearance.Settings) {
@@ -99,7 +137,7 @@ func backed(gtx layout.Context, wide bool, radius unit.Dp, inset layout.Inset, f
 // card groups content on a rounded surface with a small-caps title.
 func (w *window) card(title string, rows ...layout.Widget) layout.Widget {
 	return func(gtx layout.Context) layout.Dimensions {
-		return backed(gtx, true, 10, layout.UniformInset(unit.Dp(14)), w.pal.Surface, w.pal.Border,
+		return backed(gtx, true, 8, layout.UniformInset(unit.Dp(14)), w.pal.Surface, w.pal.Border,
 			func(gtx layout.Context) layout.Dimensions {
 				children := make([]layout.FlexChild, 0, len(rows)+1)
 				if title != "" {
@@ -121,20 +159,15 @@ func (w *window) card(title string, rows ...layout.Widget) layout.Widget {
 	}
 }
 
+// sectionTitle is a card's uppercase label.
 func (w *window) sectionTitle(s string) layout.Widget {
-	return func(gtx layout.Context) layout.Dimensions {
-		l := material.Caption(w.th, strings.ToUpper(s))
-		l.Color = w.pal.Muted
-		l.Font.Weight = font.SemiBold
-		return l.Layout(gtx)
-	}
+	return tracked(w.th, sizeLabel, w.pal.Muted, s)
 }
 
 func (w *window) title(s string) layout.Widget {
 	return func(gtx layout.Context) layout.Dimensions {
-		l := material.H6(w.th, s)
-		l.Color = w.pal.Fg
-		l.Font.Weight = font.SemiBold
+		l := material.Label(w.th, unit.Sp(20), s)
+		l.Font, l.Color = textFont, w.pal.Fg
 		return l.Layout(gtx)
 	}
 }
@@ -162,51 +195,85 @@ func (w *window) banner(s string, kind bannerKind) layout.Widget {
 	}
 }
 
-// chip is a small rounded label, such as a suggestion kind.
+// chip is a small rounded label, such as a suggestion kind, recessed into
+// the card in the page colour.
 func (w *window) chip(s string, fg color.NRGBA) layout.Widget {
 	return func(gtx layout.Context) layout.Dimensions {
-		inset := layout.Inset{Top: unit.Dp(2), Bottom: unit.Dp(2), Left: unit.Dp(8), Right: unit.Dp(8)}
-		return backed(gtx, false, 10, inset, w.pal.SurfaceAlt, color.NRGBA{}, func(gtx layout.Context) layout.Dimensions {
-			l := material.Caption(w.th, s)
-			l.Color = fg
-			l.Font.Weight = font.SemiBold
-			return l.Layout(gtx)
-		})
+		inset := layout.Inset{Top: unit.Dp(3), Bottom: unit.Dp(3), Left: unit.Dp(8), Right: unit.Dp(8)}
+		return backed(gtx, false, 6, inset, w.pal.Bg, color.NRGBA{}, tracked(w.th, 10, fg, s))
 	}
+}
+
+// buttonKind selects a button's colours.
+type buttonKind int
+
+const (
+	kindNeutral buttonKind = iota // secondary actions
+	kindPrimary                   // the accent
+	kindQuiet                     // small buttons in rows
+)
+
+// Tactile button geometry: 7 dp radius, flat fill, and a 2 dp darker
+// bottom shadow that flattens on press.
+const (
+	buttonRadius unit.Dp = 7
+	buttonShadow unit.Dp = 2
+)
+
+// tactileButton is the Blackfyre button: a flat face on a darker 2 dp
+// shadow; while pressed the face moves down onto it. A disabled button has
+// no shadow and muted colours, and takes no clicks.
+type tactileButton struct {
+	click      *widget.Clickable
+	kind       buttonKind
+	label      string
+	size       unit.Sp
+	enabled    bool
+	padX, padY unit.Dp
+	pal        *Palette
+	th         *material.Theme
+}
+
+func (b tactileButton) Layout(gtx layout.Context) layout.Dimensions {
+	face, fg, shadow := b.pal.buttonColours(b.kind)
+	if !b.enabled {
+		face, fg, shadow = b.pal.SurfaceAlt, b.pal.Muted, color.NRGBA{}
+		gtx = gtx.Disabled()
+	}
+	drop := gtx.Dp(buttonShadow)
+	return b.click.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
+		pressed := b.enabled && b.click.Pressed()
+		m := op.Record(gtx.Ops)
+		inner := gtx
+		inner.Constraints.Min = image.Point{}
+		dims := layout.Inset{Top: b.padY, Bottom: b.padY, Left: b.padX, Right: b.padX}.Layout(inner, tracked(b.th, b.size, fg, b.label))
+		call := m.Stop()
+		r := image.Rectangle{Max: dims.Size}
+		radius := gtx.Dp(buttonRadius)
+		offset := 0
+		if pressed {
+			offset = drop
+		} else if shadow.A != 0 {
+			paint.FillShape(gtx.Ops, shadow, clip.UniformRRect(r.Add(image.Pt(0, drop)), radius).Op(gtx.Ops))
+		}
+		t := op.Offset(image.Pt(0, offset)).Push(gtx.Ops)
+		paint.FillShape(gtx.Ops, face, clip.UniformRRect(r, radius).Op(gtx.Ops))
+		call.Add(gtx.Ops)
+		t.Pop()
+		return layout.Dimensions{Size: image.Pt(dims.Size.X, dims.Size.Y+drop), Baseline: dims.Baseline}
+	})
 }
 
 func (w *window) primaryButton(btn *widget.Clickable, label string) layout.Widget {
-	return func(gtx layout.Context) layout.Dimensions {
-		b := material.Button(w.th, btn, label)
-		b.Background, b.Color = w.pal.Accent, w.pal.OnAccent
-		b.CornerRadius = unit.Dp(8)
-		b.Inset = layout.Inset{Top: unit.Dp(9), Bottom: unit.Dp(9), Left: unit.Dp(20), Right: unit.Dp(20)}
-		return b.Layout(gtx)
-	}
+	return tactileButton{click: btn, kind: kindPrimary, label: label, size: 12, enabled: true, padX: 20, padY: 10, pal: &w.pal, th: w.th}.Layout
 }
 
 func (w *window) secondaryButton(btn *widget.Clickable, label string) layout.Widget {
-	return func(gtx layout.Context) layout.Dimensions {
-		b := material.Button(w.th, btn, label)
-		b.Background, b.Color = w.pal.SurfaceAlt, w.pal.Fg
-		b.CornerRadius = unit.Dp(8)
-		b.Inset = layout.Inset{Top: unit.Dp(9), Bottom: unit.Dp(9), Left: unit.Dp(18), Right: unit.Dp(18)}
-		return border(gtx, w.pal.Border, 8, b.Layout)
-	}
+	return tactileButton{click: btn, kind: kindNeutral, label: label, size: 12, enabled: true, padX: 18, padY: 10, pal: &w.pal, th: w.th}.Layout
 }
 
 func (w *window) smallButton(btn *widget.Clickable, label string, disabled bool) layout.Widget {
-	return func(gtx layout.Context) layout.Dimensions {
-		if disabled {
-			gtx = gtx.Disabled()
-		}
-		b := material.Button(w.th, btn, label)
-		b.TextSize = unit.Sp(12)
-		b.Background, b.Color = w.pal.SurfaceAlt, w.pal.Fg
-		b.CornerRadius = unit.Dp(6)
-		b.Inset = layout.Inset{Top: unit.Dp(4), Bottom: unit.Dp(4), Left: unit.Dp(10), Right: unit.Dp(10)}
-		return border(gtx, w.pal.Border, 6, b.Layout)
-	}
+	return tactileButton{click: btn, kind: kindQuiet, label: label, size: sizeLabel, enabled: !disabled, padX: 10, padY: 6, pal: &w.pal, th: w.th}.Layout
 }
 
 func border(gtx layout.Context, c color.NRGBA, radius unit.Dp, content layout.Widget) layout.Dimensions {
@@ -218,7 +285,7 @@ func (w *window) iconButton(btn *widget.Clickable, icon *widget.Icon, descriptio
 		b := material.IconButton(w.th, btn, icon, description)
 		b.Size = unit.Dp(18)
 		b.Inset = layout.UniformInset(unit.Dp(7))
-		b.Background, b.Color = w.pal.SurfaceAlt, w.pal.Fg
+		b.Background, b.Color = w.pal.QuietBg, w.pal.QuietFg
 		return b.Layout(gtx)
 	}
 }
@@ -281,7 +348,7 @@ func withAlpha(c color.NRGBA, a uint8) color.NRGBA {
 func (w *window) mono(s string) layout.Widget {
 	return func(gtx layout.Context) layout.Dimensions {
 		l := material.Body1(w.th, s)
-		l.Font.Typeface = "Go Mono"
+		l.Font = monoFont
 		l.Color = w.pal.Fg
 		return l.Layout(gtx)
 	}

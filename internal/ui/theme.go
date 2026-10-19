@@ -9,50 +9,69 @@ import (
 	"github.com/blackfyre/bopen/internal/appearance"
 )
 
-// Palette holds the semantic colours the UI draws with.
+// Palette holds the semantic colours the UI draws with: the Blackfyre
+// tokens of blackfyre.ninja, as in the Spooder desktop calibrator.
 type Palette struct {
-	Bg         color.NRGBA // window background
+	Bg         color.NRGBA // window background (paper in light mode)
 	Surface    color.NRGBA // cards
-	SurfaceAlt color.NRGBA // hovered and selected rows, chips
-	Fg         color.NRGBA // primary text
+	SurfaceAlt color.NRGBA // disabled buttons
+	Fg         color.NRGBA // primary text (ink)
 	Muted      color.NRGBA // secondary text
 	Border     color.NRGBA // card and field outlines
-	Accent     color.NRGBA // primary actions and selection
-	OnAccent   color.NRGBA // text on Accent
-	Tracking   color.NRGBA
-	Affiliate  color.NRGBA
-	Redirect   color.NRGBA
-	WarnBg     color.NRGBA
-	WarnFg     color.NRGBA
-	ErrBg      color.NRGBA
-	ErrFg      color.NRGBA
-	Scrim      color.NRGBA
+
+	Accent        color.NRGBA // the orange: primary actions and selection
+	AccentPressed color.NRGBA // the accent's shadow
+	OnAccent      color.NRGBA // text on Accent
+
+	// Neutral buttons (ink in light mode) and quiet buttons (small ones).
+	ButtonBg, ButtonFg, ButtonShadow color.NRGBA
+	QuietBg, QuietFg, QuietShadow    color.NRGBA
+
+	Tracking  color.NRGBA
+	Affiliate color.NRGBA
+	Redirect  color.NRGBA
+	WarnBg    color.NRGBA
+	WarnFg    color.NRGBA
+	ErrBg     color.NRGBA
+	ErrFg     color.NRGBA
+	Scrim     color.NRGBA
 }
 
 func rgb(v uint32) color.NRGBA {
 	return color.NRGBA{R: uint8(v >> 16), G: uint8(v >> 8), B: uint8(v), A: 0xFF}
 }
 
+// Blackfyre tokens (blackfyre.ninja styles.css; the dark shades as in the
+// calibrator). The kind and banner colours are bopen's own roles.
 var (
+	ink   = rgb(0x1B1B19)
+	paper = rgb(0xE6E4DF)
+
 	lightPalette = Palette{
-		Bg: rgb(0xF2F3F5), Surface: rgb(0xFFFFFF), SurfaceAlt: rgb(0xECEEF2),
-		Fg: rgb(0x1B1D22), Muted: rgb(0x5A606B), Border: rgb(0xD6DAE1),
-		Tracking: rgb(0xB3261E), Affiliate: rgb(0x8A5000), Redirect: rgb(0x0B57D0),
-		WarnBg: rgb(0xFFF3DC), WarnFg: rgb(0x5C3B00), ErrBg: rgb(0xFDECEA), ErrFg: rgb(0x8C1D18),
+		Bg: paper, Surface: rgb(0xF3F2EE), SurfaceAlt: rgb(0xDEDBD4),
+		Fg: ink, Muted: rgb(0x5E5C56), Border: rgb(0xD3D0C9),
+		Accent: rgb(0xE2551D), AccentPressed: rgb(0xA93A0F), OnAccent: ink,
+		ButtonBg: ink, ButtonFg: rgb(0xF3F2EE), ButtonShadow: rgb(0x000000),
+		QuietBg: rgb(0xDEDBD4), QuietFg: ink, QuietShadow: rgb(0xC4C0B8),
+		Tracking: rgb(0xA3390C), Affiliate: rgb(0x6E5300), Redirect: rgb(0x2A52A8),
+		WarnBg: rgb(0xFFF6C9), WarnFg: rgb(0x6E5300), ErrBg: rgb(0xF6DED4), ErrFg: rgb(0x7F2C09),
 		Scrim: color.NRGBA{A: 0x8C},
 	}
 	darkPalette = Palette{
-		Bg: rgb(0x15171B), Surface: rgb(0x1F2228), SurfaceAlt: rgb(0x2A2E36),
-		Fg: rgb(0xE6E8EC), Muted: rgb(0xA4AAB5), Border: rgb(0x383D47),
-		Tracking: rgb(0xFF8A80), Affiliate: rgb(0xF5C26B), Redirect: rgb(0x8AB4F8),
-		WarnBg: rgb(0x3A2C10), WarnFg: rgb(0xFFE2AE), ErrBg: rgb(0x3D1D1B), ErrFg: rgb(0xFFB4AB),
+		Bg: ink, Surface: rgb(0x2C2C29), SurfaceAlt: rgb(0x3A3935),
+		Fg: rgb(0xF3F2EE), Muted: rgb(0xA19E96), Border: rgb(0x3A3935),
+		Accent: rgb(0xE2551D), AccentPressed: rgb(0xA93A0F), OnAccent: ink,
+		ButtonBg: rgb(0x3A3935), ButtonFg: rgb(0xF3F2EE), ButtonShadow: rgb(0x121211),
+		QuietBg: rgb(0x242421), QuietFg: rgb(0xF3F2EE), QuietShadow: rgb(0x121211),
+		Tracking: rgb(0xFF8A4C), Affiliate: rgb(0xE0AF68), Redirect: rgb(0x7AA2F7),
+		WarnBg: rgb(0x33301F), WarnFg: rgb(0xE8DC9A), ErrBg: rgb(0x3D2219), ErrFg: rgb(0xFFB59A),
 		Scrim: color.NRGBA{A: 0xA6},
 	}
-	// defaultAccent is used when the system reports none.
-	defaultAccent = rgb(0x3D6FD9)
 )
 
-// NewPalette derives the palette for the host appearance.
+// NewPalette returns the Blackfyre palette for the host appearance: light
+// (paper) or dark, each with a high-contrast variant. The system accent
+// colour is not used; the accent is Blackfyre's orange.
 func NewPalette(s appearance.Settings) Palette {
 	p := lightPalette
 	if s.Dark {
@@ -66,44 +85,18 @@ func NewPalette(s appearance.Settings) Palette {
 		}
 		p.Muted, p.Border = p.Fg, p.Fg
 	}
-	accent := defaultAccent
-	if s.HasAccent {
-		accent = s.Accent
-	}
-	p.Accent, p.OnAccent = fitAccent(accent, p.Surface, s.Dark)
 	return p
 }
 
-// fitAccent adjusts accent until it stands out from surface (3:1) and its
-// text colour, black or white, reaches 4.5:1. In dark mode the accent is
-// lightened, otherwise darkened; both raise the two ratios monotonically.
-func fitAccent(accent, surface color.NRGBA, dark bool) (color.NRGBA, color.NRGBA) {
-	target := color.NRGBA{A: 0xFF}
-	if dark {
-		target = color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
+// buttonColours are a button's face, text and shadow.
+func (p Palette) buttonColours(k buttonKind) (face, fg, shadow color.NRGBA) {
+	switch k {
+	case kindPrimary:
+		return p.Accent, p.OnAccent, p.AccentPressed
+	case kindQuiet:
+		return p.QuietBg, p.QuietFg, p.QuietShadow
 	}
-	for step := 0; step <= 50; step++ {
-		c := mix(accent, target, float64(step)/50)
-		on := onColour(c)
-		if contrast(c, surface) >= 3 && contrast(on, c) >= 4.5 {
-			return c, on
-		}
-	}
-	return target, onColour(target)
-}
-
-// onColour returns black or white, whichever contrasts more with c.
-func onColour(c color.NRGBA) color.NRGBA {
-	black, white := color.NRGBA{A: 0xFF}, color.NRGBA{R: 0xFF, G: 0xFF, B: 0xFF, A: 0xFF}
-	if contrast(black, c) >= contrast(white, c) {
-		return black
-	}
-	return white
-}
-
-func mix(a, b color.NRGBA, t float64) color.NRGBA {
-	l := func(x, y uint8) uint8 { return uint8(math.Round(float64(x) + (float64(y)-float64(x))*t)) }
-	return color.NRGBA{R: l(a.R, b.R), G: l(a.G, b.G), B: l(a.B, b.B), A: 0xFF}
+	return p.ButtonBg, p.ButtonFg, p.ButtonShadow
 }
 
 // luminance is the WCAG relative luminance of an opaque colour.
@@ -127,7 +120,7 @@ func contrast(a, b color.NRGBA) float64 {
 	return (la + 0.05) / (lb + 0.05)
 }
 
-// materialTheme derives the stock widget theme from the palette.
+// apply sets the stock widget theme from the palette.
 func (p Palette) apply(th *material.Theme) {
 	th.Palette = material.Palette{Bg: p.Surface, Fg: p.Fg, ContrastBg: p.Accent, ContrastFg: p.OnAccent}
 }

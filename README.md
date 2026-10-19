@@ -121,11 +121,13 @@ bopen clean [--explain] [url...]
                   when no url is given)
 ```
 
-bopen follows your desktop's appearance: light or dark mode, the accent
-colour and the high-contrast setting, read from the XDG desktop portal on
-Linux (COSMIC, GNOME, KDE and others) and from the personalisation settings
-on Windows. Changes apply while the window is open. Every text colour keeps a
-contrast ratio of at least 4.5:1 in every mode and with any accent colour.
+bopen wears the Blackfyre look of [blackfyre.ninja](https://blackfyre.ninja):
+paper and ink, the orange accent, Archivo and JetBrains Mono (both embedded,
+under the SIL Open Font License). It follows your desktop's light or dark mode
+and high-contrast setting, read from the XDG desktop portal on Linux (COSMIC,
+GNOME, KDE and others) and from the personalisation settings on Windows.
+Changes apply while the window is open. Every text colour keeps a contrast
+ratio of at least 4.5:1 in every mode.
 
 Keyboard: `Enter` opens, `Esc` cancels, `Up`/`Down` or `1`–`9` choose the
 browser, `P` toggles a private window, `C` copies the cleaned link.

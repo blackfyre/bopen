@@ -10,8 +10,6 @@ import (
 	"time"
 
 	"gioui.org/app"
-	"gioui.org/font"
-	"gioui.org/font/gofont"
 	"gioui.org/io/clipboard"
 	"gioui.org/io/event"
 	"gioui.org/io/key"
@@ -27,6 +25,7 @@ import (
 
 	"github.com/blackfyre/bopen/internal/appearance"
 	"github.com/blackfyre/bopen/internal/clean"
+	"github.com/blackfyre/bopen/internal/ui/fonts"
 	"golang.org/x/exp/shiny/materialdesign/icons"
 )
 
@@ -150,7 +149,12 @@ func run(win *window) {
 
 func newWindow(m *Model, env *Env) *window {
 	th := material.NewTheme()
-	th.Shaper = text.NewShaper(text.NoSystemFonts(), text.WithCollection(gofont.Collection()))
+	faces, err := fonts.Collection()
+	if err != nil {
+		panic(err) // the fonts are embedded; every window test parses them
+	}
+	th.Shaper = text.NewShaper(text.NoSystemFonts(), text.WithCollection(faces))
+	th.Face = fonts.Text
 	w := &window{m: m, env: env, th: th, fetches: make(chan fetchResult, 4), looks: make(chan appearance.Settings, 4), expansions: make(chan expandResult, 1)}
 	w.list.Axis = layout.Vertical
 	w.settings.list.Axis = layout.Vertical
@@ -411,7 +415,7 @@ func (w *window) link(gtx layout.Context) layout.Dimensions {
 func (w *window) linkText(gtx layout.Context) layout.Dimensions {
 	var spans []richtext.SpanStyle
 	for _, r := range w.m.runs() {
-		s := richtext.SpanStyle{Content: r.text, Size: unit.Sp(15), Color: w.pal.Fg, Font: font.Font{Typeface: "Go Mono"}}
+		s := richtext.SpanStyle{Content: r.text, Size: unit.Sp(15), Color: w.pal.Fg, Font: monoFont}
 		if r.param >= 0 {
 			// Parameters are interactive so their hover state tells the
 			// right-click menu which parameter it is for.
@@ -421,7 +425,6 @@ func (w *window) linkText(gtx layout.Context) layout.Dimensions {
 		if r.kind != "" {
 			if r.accepted {
 				s.Color = w.pal.kind(r.kind)
-				s.Font.Weight = font.Bold
 			} else {
 				s.Color = w.pal.Muted
 			}
@@ -447,7 +450,7 @@ func (w *window) suggestion(i int) layout.Widget {
 		cb := material.CheckBox(w.th, &w.toggles[i], label)
 		cb.Color = w.pal.kind(s.Kind)
 		cb.IconColor = w.pal.Accent
-		cb.Font.Typeface = "Go Mono"
+		cb.Font = monoFont
 		details := s.Reason
 		if s.Kind == clean.KindRedirect {
 			details += "\nTarget: " + s.Target
@@ -495,7 +498,7 @@ func (w *window) resultRow(gtx layout.Context) layout.Dimensions {
 
 func (w *window) resultURL(gtx layout.Context) layout.Dimensions {
 	l := material.Body1(w.th, w.m.Result())
-	l.Font.Typeface = "Go Mono"
+	l.Font = monoFont
 	l.Color = w.pal.Fg
 	l.State = &w.result
 	l.WrapPolicy = text.WrapGraphemes
