@@ -370,4 +370,5 @@ Both are prepared in the repository and activated once by the maintainer:
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). The embedded Archivo and JetBrains Mono fonts
+are under the SIL Open Font License 1.1 (`internal/ui/fonts/`).

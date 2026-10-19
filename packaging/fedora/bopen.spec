@@ -7,7 +7,7 @@ Version:        0.3.0
 Release:        1%{?dist}
 Summary:        Link inspector that removes tracking and opens links in the browser you choose
 
-License:        MIT
+License:        MIT AND OFL-1.1
 URL:            https://github.com/blackfyre/bopen
 Source0:        %{url}/archive/v%{version}/%{name}-%{version}.tar.gz
 
@@ -48,7 +48,7 @@ go test ./internal/...
 install -Dpm 0755 bopen %{buildroot}%{_bindir}/bopen
 
 %files
-%license LICENSE
+%license LICENSE internal/ui/fonts/Archivo-OFL.txt internal/ui/fonts/JetBrainsMono-OFL.txt
 %doc README.md
 %{_bindir}/bopen
 

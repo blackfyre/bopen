@@ -57,7 +57,7 @@ nfpms:
       Link inspector registered as the default browser: highlights tracking
       parameters and redirect wrappers with reasons, then opens the link in the
       browser you choose.
-    license: MIT
+    license: MIT AND OFL-1.1
     formats: [deb, rpm]
     bindir: /usr/bin
     contents:
@@ -105,7 +105,7 @@ winget:
       shows the link with redirect wrappers and tracking parameters
       highlighted, each with the reason it is suggested for removal, and
       opens the result in the browser, profile or private window you choose.
-    license: MIT
+    license: MIT AND OFL-1.1
     license_url: https://github.com/blackfyre/bopen/blob/main/LICENSE
     homepage: https://github.com/blackfyre/bopen
     release_notes_url: https://github.com/blackfyre/bopen/releases/tag/{{ .Tag }}
