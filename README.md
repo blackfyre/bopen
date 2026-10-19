@@ -11,6 +11,11 @@ any application, bopen shows it to you first:
 - you pick the browser to open it in; the browser you used last is
   pre-selected.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/inspector-dark.png">
+  <img src="docs/inspector-light.png" width="760" alt="The bopen inspector showing a Google redirect to Amazon: the redirect is unwrapped and the utm_source and fbclid tracking parameters are removed, while the affiliate tag is kept. Below are the resulting link and the browsers to open it in.">
+</picture>
+
 Installed browsers are discovered automatically: on Linux from desktop
 entries (system packages, Flatpak, Snap and per-user installs), on Windows
 from the registered browsers.
@@ -323,6 +328,9 @@ go test ./...
 
 The Windows build needs no C toolchain and can be cross-compiled from Linux.
 `-H=windowsgui` stops a console window flashing up on every link.
+
+`BOPEN_SCREENSHOTS=docs go test -run Screenshots ./internal/ui` renders the
+README's screenshots off screen (it needs a GPU or a software renderer).
 
 `goreleaser release --snapshot --clean` builds every release asset into
 `dist/` without publishing anything, and `scripts/test-install.sh` tests
